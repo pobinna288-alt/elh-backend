@@ -25,8 +25,7 @@ const { OpenAI } = require("openai");
 // Central route registration
 const createAdminRouter = require("./routes/admin");
 
-// ❌ REMOVED BROKEN IMPORT (this was crashing Render)
-// const { getAllAdCategories } = require("./backend/config/adCategories");
+// NOTE: getAllAdCategories is now defined inline below to fix the missing module error
 
 const { validateAdCreateRequest } = require("./backend/middleware/adValidation");
 const { generateAdTargeting } = require("./backend/services/adTargetingService");
@@ -1873,7 +1872,7 @@ Requirements:
   }
 }
 
-// Helper function to get all ad categories (mock since import was removed)
+// Helper function to get all ad categories (defined inline to fix missing module)
 function getAllAdCategories() {
   return {
     success: true,
