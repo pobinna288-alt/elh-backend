@@ -23,7 +23,7 @@ const { v4: uuidv4 } = require("uuid");
 const { OpenAI } = require("openai");
 
 // Central route registration
-const { registerAppRoutes } = require("./routes");
+const createAdminRouter = require("./routes/admin");
 const { getAllAdCategories } = require("./backend/config/adCategories");
 const { validateAdCreateRequest } = require("./backend/middleware/adValidation");
 const { generateAdTargeting } = require("./backend/services/adTargetingService");
