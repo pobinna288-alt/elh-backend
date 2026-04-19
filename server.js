@@ -45,15 +45,30 @@ const {
 // ============================================
 
 const app = express();
+
+// HEALTH CHECK ROUTE
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    success: true,
+    message: "Backend is running"
+  });
+});
+
 const PORT = process.env.PORT || 4010;
+
 const REQUEST_TIMEOUT_MIN_MS = 10000;
 const REQUEST_TIMEOUT_MAX_MS = 15000;
 const REQUEST_TIMEOUT_DEFAULT_MS = 15000;
+
 const REQUEST_TIMEOUT_MS = resolveRequestTimeoutMs(process.env.REQUEST_TIMEOUT_MS);
+
 const EXTERNAL_CALL_TIMEOUT_MS = Number(process.env.EXTERNAL_CALL_TIMEOUT_MS || 12000);
 const RESTART_DELAY_MS = Number(process.env.RESTART_DELAY_MS || 2000);
 const MAX_RESTART_ATTEMPTS = Number(process.env.MAX_RESTART_ATTEMPTS || 20);
+
 const HOST = process.env.HOST || "0.0.0.0";
+
 const BASE_URL = `${process.env.BASE_URL || ""}`.trim().replace(/\/+$/, "");
 
 let isManualShutdownRequested = false;
