@@ -24,13 +24,14 @@ const { OpenAI } = require("openai");
 
 // Central route registration
 const createAdminRouter = require("./routes/admin");
+
 const { getAllAdCategories } = require("./backend/config/adCategories");
 const { validateAdCreateRequest } = require("./backend/middleware/adValidation");
 const { generateAdTargeting } = require("./backend/services/adTargetingService");
 const { convertToUsd, normalizeCurrencyCode } = require("./backend/services/currencyConversionService");
 const followSellerService = require("./backend/services/followSellerService");
 const attentionScoreService = require("./backend/services/attentionScoreService");
-const createAdminRouter = require("./routes/admin");
+
 const { createGetAdminDashboardHandler } = require("./controllers/adminController");
 const { createRequireAdmin } = require("./middleware/auth");
 const { createAdminDataSource } = require("./models/adminDataSource");
