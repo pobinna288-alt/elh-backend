@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELH Backend API Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            position: relative;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section h2::before {
+            content: '🚀';
+            font-size: 1.5em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .response {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .response pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .success {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+        
+        .error {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+        
+        .token-display {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .badge-premium {
+            background: #fbbf24;
+            color: #92400e;
+        }
+        
+        .badge-auth {
+            background: #10b981;
+            color: white;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        .quick-actions button {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .test-credentials {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            padding: 20px;
+            border-radius: 10px;
+            color: #92400e;
+            margin-bottom: 20px;
+        }
+        
+        .test-credentials h3 {
+            margin-bottom: 10px;
+        }
+        
+        .test-credentials code {
+            background: rgba(255,255,255,0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .notif-bell-wrap {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+        }
+
+        .bell-button {
+            position: relative;
+            min-width: auto;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.18);
+            backdrop-filter: blur(8px);
+        }
+
+        .notif-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .notif-panel {
+            display: none;
+            position: absolute;
+            top: 56px;
+            right: 0;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+            background: white;
+            color: #111827;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            overflow: hidden;
+        }
+
+        .notif-panel.open {
+            display: block;
+        }
+
+        .notif-header {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .notif-list {
+            max-height: 380px;
+            overflow-y: auto;
+        }
+
+        .notif-item {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .notif-item:hover {
+            background: #f8fafc;
+        }
+
+        .notif-item.high {
+            font-weight: bold;
+            border-left: 4px solid #ef4444;
+        }
+
+        .notif-item.medium {
+            opacity: 0.9;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .notif-item.low {
+            opacity: 0.7;
+            border-left: 4px solid #cbd5e1;
+        }
+
+        .notif-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .notif-title {
+            margin-bottom: 4px;
+        }
+
+        .notif-message {
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .notif-time {
+            font-size: 12px;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        .notif-empty {
+            padding: 24px;
+            text-align: center;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ELH Backend API Tester</h1>
+            <p>Test all API endpoints in your browser</p>
+            <div style="margin-top: 15px;">
+                <span class="status-indicator status-online"></span>
+                <span id="serverStatus">Server Status: Checking...</span>
+            </div>
+            <div class="notif-bell-wrap" id="notifBellWrap">
+                <button class="bell-button" type="button" onclick="toggleNotificationPanel(event)">
+                    🔔
+                    <span id="notifBadge" class="notif-badge" style="display:none;">0</span>
+                </button>
+                <div class="notif-panel" id="notifPanel">
+                    <div class="notif-header">
+                        <strong>Notifications</strong>
+                        <span id="notifSummary">0 unread</span>
+                    </div>
+                    <div class="notif-list" id="notifList">
+                        <div class="notif-empty">Login and load notifications.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="test-credentials">
+                <h3>🔑 Test Credentials</h3>
+                <p><strong>Demo User:</strong> <code>demo@elh.com</code> / <code>demo123</code> (Premium, 5000 coins)</p>
+                <p><strong>John Seller:</strong> <code>john@elh.com</code> / <code>password123</code> (Pro, 12000 coins)</p>
+            </div>
+            
+            <!-- Authentication Section -->
+            <div class="section">
+                <h2>Authentication</h2>
+                <div class="grid">
+                    <div>
+                        <h3>Register <span class="badge badge-auth">New User</span></h3>
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" id="regFullName" placeholder="John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="regEmail" placeholder="john@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="regPassword" placeholder="Min 6 characters">
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm Password</label>
+                            <input type="password" id="regConfirmPassword" placeholder="Same as password">
+                        </div>
+                        <div class="form-group">
+                            <label>Age</label>
+                            <input type="number" id="regAge" placeholder="25">
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" id="regLocation" placeholder="New York">
+                        </div>
+                        <button onclick="register()">Register</button>
+                        <div id="registerResponse" class="response" style="display:none;"></div>
+                    </div>
+                    
+                    <div>
+                        <h3>Login <span class="badge badge-auth">Get Token</span></h3>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="loginEmail" value="demo@elh.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="loginPassword" value="demo123">
+                        </div>
+                        <button onclick="login()">Login</button>
+                        <div id="loginResponse" class="response" style="display:none;"></div>
+                        <div id="tokenDisplay" class="token-display" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- User Profile Section -->
+            <div class="section">
+                <h2>User Profile</h2>
+                <div class="quick-actions">
+                    <button onclick="getProfile()">Get Profile</button>
+                    <button onclick="getCoins()">Check Coins</button>
+                    <button onclick="checkPremium()">Check Premium</button>
+                </div>
+                <div id="profileResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Ads Section -->
+            <div class="section">
+                <h2>Ads Management</h2>
+                <div class="grid">
+                    <div>
+                        <h3>Get All Ads</h3>
+                        <div class="form-group">
+                            <label>Category (optional)</label>
+                            <select id="adsCategory">
+                                <option value="">All Categories</option>
+                                <option value="Tech">Tech</option>
+                                <option value="Clothes">Clothes</option>
+                                <option value="Services">Services</option>
+                                <option value="Electronics">Electronics</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Search</label>
+                            <input type="text" id="adsSearch" placeholder="Search ads...">
+                        </div>
+                        <button onclick="getAds()">Get Ads</button>
+                    </div>
+                    
+                    <div>
+                        <h3>Create Ad</h3>
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" id="adTitle" placeholder="Amazing Product">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea id="adDescription" rows="3" placeholder="Product description..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Price</label>
+                            <input type="number" id="adPrice" placeholder="99.99">
+                        </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="adCategory">
+                                <option value="Tech">Tech</option>
+                                <option value="Clothes">Clothes</option>
+                                <option value="Services">Services</option>
+                            </select>
+                        </div>
+                        <button onclick="createAd()">Create Ad</button>
+                    </div>
+                </div>
+                <div id="adsResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- AI Tools Section -->
+            <div class="section">
+                <h2>AI Tools <span class="badge badge-premium">Premium Only</span></h2>
+                <div class="grid">
+                    <div>
+                        <h3>Smart Copywriter</h3>
+                        <div class="form-group">
+                            <label>Product Name</label>
+                            <input type="text" id="aiProductName" placeholder="Gaming Laptop">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="aiDescription" placeholder="High performance">
+                        </div>
+                        <button onclick="useCopywriter()">Generate Copy</button>
+                    </div>
+                    
+                    <div>
+                        <h3>Competitor Analysis</h3>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <input type="text" id="compCategory" placeholder="Tech">
+                        </div>
+                        <div class="form-group">
+                            <label>Price Range</label>
+                            <input type="number" id="compPrice" placeholder="299.99">
+                        </div>
+                        <button onclick="analyzeCompetitors()">Analyze</button>
+                    </div>
+                </div>
+                <div id="aiResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Streak & Rewards Section -->
+            <div class="section">
+                <h2>Streak & Rewards</h2>
+                <div class="quick-actions">
+                    <button onclick="dailyCheckIn()">Daily Check-in</button>
+                    <button onclick="getStreak()">View Streak</button>
+                    <button onclick="getReferralCode()">Get Referral Code</button>
+                </div>
+                <div id="streakResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Social Features Section -->
+            <div class="section">
+                <h2>Social Features</h2>
+                <div class="quick-actions">
+                    <button onclick="getNotifications()">Get Notifications</button>
+                    <button onclick="getMessages()">Get Messages</button>
+                    <button onclick="getWishlist()">View Wishlist</button>
+                    <button onclick="getFollowers()">View Followers</button>
+                </div>
+                <div id="socialResponse" class="response" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:3001/api';
+        const MAX_NOTIFICATIONS = 50;
+        const priorityOrder = { HIGH: 1, MEDIUM: 2, LOW: 3 };
+        let authToken = null;
+        let latestNotifications = [];
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function timeAgo(date) {
+            const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + ' min ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + ' hrs ago';
+            return 'Yesterday';
+        }
+
+        function closeNotificationPanel() {
+            document.getElementById('notifPanel').classList.remove('open');
+        }
+
+        function toggleNotificationPanel(event) {
+            event.stopPropagation();
+            document.getElementById('notifPanel').classList.toggle('open');
+        }
+
+        async function markNotificationAsRead(notificationId) {
+            if (!authToken || !notificationId) {
+                return;
+            }
+
+            try {
+                await fetch(`${API_URL}/notifications/read`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ notificationId })
+                });
+            } catch (error) {
+                console.warn('Could not mark notification as read:', error);
+            }
+        }
+
+        async function handleNotificationClick(notif) {
+            if (!notif) {
+                return;
+            }
+
+            await markNotificationAsRead(notif.id);
+
+            if (notif.type === 'message') {
+                window.location.href = `/chat/${notif.metadata?.chat_id}`;
+                return;
+            }
+
+            if (notif.type === 'reply') {
+                window.location.href = `/ad/${notif.metadata?.ad_id}`;
+                return;
+            }
+
+            if (notif.type === 'referral') {
+                window.location.href = '/referrals';
+                return;
+            }
+
+            window.location.href = '/updates';
+        }
+
+        function handleNotificationClickById(notificationId) {
+            const notif = latestNotifications.find(item => item.id === notificationId);
+            handleNotificationClick(notif);
+        }
+
+        function renderNotifications(payload = {}) {
+            const notifications = [...(payload.notifications || [])]
+                .sort((a, b) => {
+                    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                        return priorityOrder[a.priority] - priorityOrder[b.priority];
+                    }
+                    return new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt);
+                })
+                .slice(0, MAX_NOTIFICATIONS);
+
+            latestNotifications = notifications;
+
+            const unreadCount = payload.unreadCount ?? notifications.filter(
+                n => !n.isRead && n.priority !== 'LOW'
+            ).length;
+
+            const badge = document.getElementById('notifBadge');
+            const summary = document.getElementById('notifSummary');
+            const list = document.getElementById('notifList');
+
+            badge.textContent = unreadCount;
+            badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+            summary.textContent = `${unreadCount} unread`;
+
+            if (!notifications.length) {
+                list.innerHTML = '<div class="notif-empty">No notifications to show.</div>';
+                return;
+            }
+
+            list.innerHTML = notifications.map(notif => {
+                const priorityClass = (notif.priority || 'LOW').toLowerCase();
+                const title = notif.preview || `${notif.icon || '⚪'} ${notif.title || 'Notification'}`;
+                const message = notif.message || '';
+                const displayTime = notif.timeAgo || timeAgo(notif.created_at || notif.createdAt);
+
+                return `
+                    <div class="notif-item ${priorityClass}" onclick="handleNotificationClickById('${notif.id}')">
+                        <div class="notif-main">
+                            <div class="notif-title">${escapeHtml(title)}</div>
+                            <div class="notif-message">${escapeHtml(message)}</div>
+                        </div>
+                        <div class="notif-time">${escapeHtml(displayTime)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        document.addEventListener('click', (event) => {
+            const bellWrap = document.getElementById('notifBellWrap');
+            if (bellWrap && !bellWrap.contains(event.target)) {
+                closeNotificationPanel();
+            }
+        });
+        
+        // Check server status
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                document.getElementById('serverStatus').innerHTML = 
+                    `<span class="status-indicator status-online"></span>Server Online - ${data.database.users} users, ${data.database.ads} ads`;
+            } catch (error) {
+                document.getElementById('serverStatus').innerHTML = 
+                    `<span class="status-indicator" style="background: #ef4444;"></span>Server Offline`;
+            }
+        }
+        
+        checkServerStatus();
+        setInterval(checkServerStatus, 30000);
+        
+        // Helper function to display response
+        function displayResponse(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = isError ? 'response error' : 'response success';
+            element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        
+        // Authentication
+        async function register() {
+            const data = {
+                fullName: document.getElementById('regFullName').value,
+                email: document.getElementById('regEmail').value,
+                password: document.getElementById('regPassword').value,
+                confirmPassword: document.getElementById('regConfirmPassword').value,
+                age: parseInt(document.getElementById('regAge').value),
+                location: document.getElementById('regLocation').value
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                displayResponse('registerResponse', result, !response.ok);
+                
+                if (response.ok && result.token) {
+                    authToken = result.token;
+                    document.getElementById('tokenDisplay').style.display = 'block';
+                    document.getElementById('tokenDisplay').textContent = `Token: ${authToken}`;
+                    getNotifications();
+                }
+            } catch (error) {
+                displayResponse('registerResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function login() {
+            const data = {
+                email: document.getElementById('loginEmail').value,
+                password: document.getElementById('loginPassword').value
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                displayResponse('loginResponse', result, !response.ok);
+                
+                if (response.ok && result.token) {
+                    authToken = result.token;
+                    document.getElementById('tokenDisplay').style.display = 'block';
+                    document.getElementById('tokenDisplay').textContent = `Token: ${authToken}`;
+                    getNotifications();
+                }
+            } catch (error) {
+                displayResponse('loginResponse', { error: error.message }, true);
+            }
+        }
+        
+        // Profile
+        async function getProfile() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/user/profile`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('profileResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('profileResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getCoins() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/user/coins`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('profileResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('profileResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function checkPremium() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/premium/check`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('profileResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('profileResponse', { error: error.message }, true);
+            }
+        }
+        
+        // Ads
+        async function getAds() {
+            const category = document.getElementById('adsCategory').value;
+            const search = document.getElementById('adsSearch').value;
+            
+            let url = `${API_URL}/ads?`;
+            if (category) url += `category=${category}&`;
+            if (search) url += `search=${search}&`;
+            
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                displayResponse('adsResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('adsResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function createAd() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            const data = {
+                title: document.getElementById('adTitle').value,
+                description: document.getElementById('adDescription').value,
+                price: parseFloat(document.getElementById('adPrice').value),
+                category: document.getElementById('adCategory').value
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/ads/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                displayResponse('adsResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('adsResponse', { error: error.message }, true);
+            }
+        }
+        
+        // AI Tools
+        async function useCopywriter() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            const data = {
+                productName: document.getElementById('aiProductName').value,
+                description: document.getElementById('aiDescription').value
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/ai/copywriter`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                displayResponse('aiResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('aiResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function analyzeCompetitors() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            const data = {
+                category: document.getElementById('compCategory').value,
+                priceRange: parseFloat(document.getElementById('compPrice').value)
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/ai/competitor`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                displayResponse('aiResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('aiResponse', { error: error.message }, true);
+            }
+        }
+        
+        // Streak & Rewards
+        async function dailyCheckIn() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/streak/checkin`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('streakResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('streakResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getStreak() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/streak`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('streakResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('streakResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getReferralCode() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/referral/code`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('streakResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('streakResponse', { error: error.message }, true);
+            }
+        }
+        
+        // Social Features
+        async function getNotifications() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/notifications`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('socialResponse', result, !response.ok);
+
+                if (response.ok) {
+                    renderNotifications(result);
+                }
+            } catch (error) {
+                displayResponse('socialResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getMessages() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/messages`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('socialResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('socialResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getWishlist() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/social/wishlist`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('socialResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('socialResponse', { error: error.message }, true);
+            }
+        }
+        
+        async function getFollowers() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/social/followers`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json();
+                displayResponse('socialResponse', result, !response.ok);
+            } catch (error) {
+                displayResponse('socialResponse', { error: error.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>

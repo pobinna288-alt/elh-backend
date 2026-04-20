@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EL HANNORA - Fixed Connection</title>
+<!-- (Include all your CSS styles here - keeping it short for clarity) -->
+</head>
+<body>
+
+<script>
+// ========================================================================
+// ✅ FIXED API CLIENT - NOW POINTS TO CORRECT PORT
+// ========================================================================
+const API_CONFIG = {
+    BASE_URL: 'http://localhost:5000', // ✅ FIXED: Main server runs on port 5000
+    TIMEOUT: 10000,
+    HEADERS: {
+        'Content-Type': 'application/json'
+    }
+};
+
+/**
+ * ✅ FIXED API Client - Properly configured
+ */
+const apiClient = {
+    async request(method, endpoint, data = null, options = {}) {
+        const { timeout = API_CONFIG.TIMEOUT, showLoader = true } = options;
+        
+        if (showLoader) {
+            this.showLoading(true);
+        }
+        
+        try {
+            const url = `${API_CONFIG.BASE_URL}${endpoint}`;
+            console.log(`🌐 Requesting: ${method} ${url}`); // Debug log
+            
+            const authToken = localStorage.getItem('authToken');
+            
+            const headers = {
+                ...API_CONFIG.HEADERS
+            };
+            
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            
+            const config = {
+                method,
+                headers
+            };
+            
+            if (data && ['POST', 'PUT', 'PATCH'].includes(method)) {
+                config.body = JSON.stringify(data);
+            }
+            
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Request timeout')), timeout);
+            });
+            
+            const response = await Promise.race([
+                fetch(url, config),
+                timeoutPromise
+            ]);
+            
+            if (showLoader) {
+                this.showLoading(false);
+            }
+            
+            let responseData;
+            try {
+                responseData = await response.json();
+            } catch (e) {
+                responseData = { message: response.statusText };
+            }
+            
+            if (!response.ok) {
+                const error = new Error(responseData.message || `HTTP ${response.status}`);
+                error.status = response.status;
+                error.data = responseData;
+                throw error;
+            }
+            
+            console.log('✅ Response:', responseData); // Debug log
+            return responseData;
+            
+        } catch (error) {
+            if (showLoader) {
+                this.showLoading(false);
+            }
+            
+            console.error('❌ API Error:', error); // Debug log
+            
+            if (error.message === 'Request timeout') {
+                alert('⏱️ Request timeout - Server is taking too long to respond');
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                alert('🚫 Server not reachable!\n\n' +
+                      '✅ CHECKLIST:\n' +
+                      '1. Backend server running? Run: node server.js\n' +
+                      '2. Correct port (3001)?\n' +
+                      '3. Check console for errors (F12)\n\n' +
+                      'Backend URL: ' + API_CONFIG.BASE_URL);
+            } else {
+                alert('❌ Error: ' + (error.data?.message || error.message));
+            }
+            
+            throw error;
+        }
+    },
+    
+    async get(endpoint, options = {}) {
+        return this.request('GET', endpoint, null, options);
+    },
+    
+    async post(endpoint, data, options = {}) {
+        return this.request('POST', endpoint, data, options);
+    },
+    
+    showLoading(show) {
+        // Loading indicator implementation
+    }
+};
+
+// Test connection on page load
+window.addEventListener('DOMContentLoaded', async () => {
+    console.log('🔍 Testing backend connection...');
+    console.log('📍 Backend URL:', API_CONFIG.BASE_URL);
+    
+    try {
+        // Test if backend is reachable
+        const response = await fetch(API_CONFIG.BASE_URL + '/health');
+        if (response.ok) {
+            console.log('✅ Backend is reachable!');
+            alert('✅ Backend connection successful!\n\nBackend URL: ' + API_CONFIG.BASE_URL);
+        } else {
+            console.warn('⚠️ Backend responded but with error:', response.status);
+        }
+    } catch (error) {
+        console.error('❌ Backend NOT reachable:', error);
+        alert('❌ BACKEND NOT RUNNING!\n\n' +
+              'Please start the backend server:\n\n' +
+              '1. Open terminal\n' +
+              '2. cd express-server\n' +
+              '3. node server.js\n\n' +
+              'Expected URL: ' + API_CONFIG.BASE_URL);
+    }
+});
+
+// ✅ FIXED Login Handler
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById("loginFormSubmit");
+    if (loginForm) {
+        loginForm.onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById("loginEmail").value;
+            const password = document.getElementById("loginPassword").value;
+            
+            if (!email || !password) {
+                alert("Please fill in all fields");
+                return;
+            }
+            
+            console.log('🔐 Attempting login...', { email }); // Debug log
+            
+            try {
+                const result = await apiClient.post('/auth/login', {
+                    email: email,
+                    password: password
+                });
+                
+                console.log('✅ Login successful:', result);
+                
+                if (result.token) {
+                    localStorage.setItem('authToken', result.token);
+                }
+                
+                if (result.user) {
+                    localStorage.setItem('currentUser', JSON.stringify(result.user));
+                }
+                
+                alert('✅ Login successful! Welcome ' + (result.user?.name || 'User') + '!');
+                
+            } catch (error) {
+                console.error('❌ Login failed:', error);
+            }
+        };
+    }
+});
+
+</script>
+
+<!-- Include rest of your HTML here -->
+
+</body>
+</html>

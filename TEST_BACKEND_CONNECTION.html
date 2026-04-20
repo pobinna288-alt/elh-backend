@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0a0b1e;
+            color: white;
+        }
+        .test-box {
+            background: #1a1c38;
+            border: 2px solid #4361ee;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .status.loading {
+            background: #ffd166;
+            color: #0a0b1e;
+        }
+        .status.success {
+            background: #06d6a0;
+            color: #0a0b1e;
+        }
+        .status.error {
+            background: #ef476f;
+            color: white;
+        }
+        button {
+            background: linear-gradient(135deg, #4361ee, #3a0ca3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(67, 97, 238, 0.4);
+        }
+        pre {
+            background: #12132d;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            border-left: 4px solid #4361ee;
+        }
+        h1 {
+            color: #4361ee;
+        }
+        h2 {
+            color: #06d6a0;
+        }
+        .warning {
+            background: rgba(255, 209, 102, 0.1);
+            border: 1px solid #ffd166;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 EL HANNORA Backend Connection Test</h1>
+    
+    <div class="warning">
+        ⚠️ <strong>Before testing:</strong> Make sure the backend server is running!<br>
+        Run: <code>node server.js</code> in the backend folder
+    </div>
+
+    <div class="test-box">
+        <h2>Test 1: Health Check</h2>
+        <p>Testing: <code>GET http://localhost:5000/health</code></p>
+        <p>Status: <span id="health-status" class="status loading">Not tested</span></p>
+        <button onclick="testHealth()">Run Test</button>
+        <pre id="health-result">Click "Run Test" to check backend health</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>Test 2: Demo Login</h2>
+        <p>Testing: <code>POST http://localhost:5000/auth/login</code></p>
+        <p>Credentials: demo@gmail.com / password123</p>
+        <p>Status: <span id="login-status" class="status loading">Not tested</span></p>
+        <button onclick="testLogin()">Run Test</button>
+        <pre id="login-result">Click "Run Test" to test login</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>Test 3: Create New Account</h2>
+        <p>Testing: <code>POST http://localhost:5000/auth/signup</code></p>
+        <p>Status: <span id="signup-status" class="status loading">Not tested</span></p>
+        <button onclick="testSignup()">Run Test</button>
+        <pre id="signup-result">Click "Run Test" to test signup</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>Run All Tests</h2>
+        <button onclick="runAllTests()" style="background: linear-gradient(135deg, #06d6a0, #118ab2); font-size: 18px; padding: 15px 30px;">
+            🚀 Run All Tests
+        </button>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+
+        async function testHealth() {
+            const statusEl = document.getElementById('health-status');
+            const resultEl = document.getElementById('health-result');
+            
+            statusEl.textContent = 'Testing...';
+            statusEl.className = 'status loading';
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusEl.textContent = '✅ SUCCESS';
+                    statusEl.className = 'status success';
+                    resultEl.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    statusEl.textContent = '❌ FAILED';
+                    statusEl.className = 'status error';
+                    resultEl.textContent = `Error: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ CONNECTION FAILED';
+                statusEl.className = 'status error';
+                resultEl.textContent = `Error: ${error.message}\n\n🚨 Backend is not running!\n\nRun: node server.js`;
+            }
+        }
+
+        async function testLogin() {
+            const statusEl = document.getElementById('login-status');
+            const resultEl = document.getElementById('login-result');
+            
+            statusEl.textContent = 'Testing...';
+            statusEl.className = 'status loading';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'demo@gmail.com',
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    statusEl.textContent = '✅ LOGIN SUCCESS';
+                    statusEl.className = 'status success';
+                    resultEl.textContent = `Success! Token received:\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    statusEl.textContent = '❌ LOGIN FAILED';
+                    statusEl.className = 'status error';
+                    resultEl.textContent = `Error: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ CONNECTION FAILED';
+                statusEl.className = 'status error';
+                resultEl.textContent = `Error: ${error.message}\n\n🚨 Backend is not running!`;
+            }
+        }
+
+        async function testSignup() {
+            const statusEl = document.getElementById('signup-status');
+            const resultEl = document.getElementById('signup-result');
+            
+            statusEl.textContent = 'Testing...';
+            statusEl.className = 'status loading';
+            
+            const randomEmail = `test${Date.now()}@example.com`;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/signup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: 'Test User',
+                        email: randomEmail,
+                        password: 'password123',
+                        age: 25,
+                        location: 'Test City'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.token) {
+                    statusEl.textContent = '✅ SIGNUP SUCCESS';
+                    statusEl.className = 'status success';
+                    resultEl.textContent = `Success! Account created:\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    statusEl.textContent = '❌ SIGNUP FAILED';
+                    statusEl.className = 'status error';
+                    resultEl.textContent = `Error: ${response.status}\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ CONNECTION FAILED';
+                statusEl.className = 'status error';
+                resultEl.textContent = `Error: ${error.message}\n\n🚨 Backend is not running!`;
+            }
+        }
+
+        async function runAllTests() {
+            console.log('Running all tests...');
+            await testHealth();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testLogin();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testSignup();
+            console.log('All tests completed!');
+        }
+
+        // Auto-run health check on page load
+        window.addEventListener('load', () => {
+            setTimeout(testHealth, 500);
+        });
+    </script>
+</body>
+</html>

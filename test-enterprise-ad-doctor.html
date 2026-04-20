@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise AI Ad Doctor - Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #e0e0e0;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { 
+      text-align: center; 
+      margin-bottom: 30px; 
+      color: #00d4ff;
+      font-size: 2rem;
+      text-shadow: 0 0 20px rgba(0,212,255,0.3);
+    }
+    h2 { color: #ffb347; margin: 20px 0 15px; font-size: 1.2rem; }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(90deg, #ff6b6b, #feca57);
+      color: #1a1a2e;
+      padding: 4px 12px;
+      border-radius: 15px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+    
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 25px;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .form-group { margin-bottom: 18px; }
+    label { 
+      display: block; 
+      margin-bottom: 6px; 
+      color: #a0a0a0;
+      font-size: 0.9rem;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 0.95rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #00d4ff;
+      box-shadow: 0 0 15px rgba(0,212,255,0.2);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    select { cursor: pointer; }
+    
+    .checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .checkbox-item:hover { background: rgba(0,0,0,0.4); }
+    .checkbox-item input { width: auto; }
+    
+    button {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover { transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #00d4ff, #0099cc);
+      color: #1a1a2e;
+      box-shadow: 0 4px 20px rgba(0,212,255,0.3);
+    }
+    .btn-ai {
+      background: linear-gradient(135deg, #ff6b6b, #feca57);
+      color: #1a1a2e;
+      margin-top: 10px;
+    }
+    
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(0,212,255,0.2);
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .result-section { margin-top: 30px; }
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .score-badge {
+      font-size: 2rem;
+      font-weight: bold;
+      padding: 10px 20px;
+      border-radius: 12px;
+    }
+    .score-high { background: linear-gradient(135deg, #00d46a, #00a854); color: #1a1a2e; }
+    .score-medium { background: linear-gradient(135deg, #feca57, #ff9f43); color: #1a1a2e; }
+    .score-low { background: linear-gradient(135deg, #ff6b6b, #ee5a52); color: #fff; }
+    
+    .diagnosis-list, .strategy-list {
+      list-style: none;
+      padding: 0;
+    }
+    .diagnosis-list li, .strategy-list li {
+      padding: 12px 15px;
+      margin-bottom: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      border-left: 4px solid #00d4ff;
+      font-size: 0.95rem;
+    }
+    .diagnosis-list li.strong { border-left-color: #00d46a; }
+    .diagnosis-list li.improvement { border-left-color: #feca57; }
+    .diagnosis-list li.critical { border-left-color: #ff6b6b; }
+    
+    .country-card {
+      background: rgba(0,0,0,0.3);
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .country-name {
+      font-weight: bold;
+      color: #00d4ff;
+      font-size: 1.1rem;
+    }
+    .country-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+    .stat { color: #a0a0a0; }
+    .stat-value { color: #fff; }
+    
+    .treatment-plan {
+      list-style: none;
+      padding: 0;
+      counter-reset: step;
+    }
+    .treatment-plan li {
+      padding: 15px;
+      margin-bottom: 10px;
+      background: rgba(0,212,255,0.1);
+      border-radius: 8px;
+      position: relative;
+      padding-left: 50px;
+      counter-increment: step;
+    }
+    .treatment-plan li::before {
+      content: counter(step);
+      position: absolute;
+      left: 15px;
+      width: 25px;
+      height: 25px;
+      background: #00d4ff;
+      color: #1a1a2e;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 0.85rem;
+    }
+    
+    .error-box {
+      background: rgba(255,100,100,0.2);
+      border: 1px solid #ff6b6b;
+      padding: 20px;
+      border-radius: 10px;
+      color: #ff6b6b;
+    }
+    
+    pre {
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .tab:hover { background: rgba(255,255,255,0.1); }
+    .tab.active { 
+      background: rgba(0,212,255,0.2); 
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏢 Enterprise AI Ad Doctor<span class="badge">ENTERPRISE ONLY</span></h1>
+    
+    <div class="grid">
+      <!-- Input Form -->
+      <div class="card">
+        <h2>📝 Ad Information</h2>
+        
+        <div class="form-group">
+          <label>Subscription Plan</label>
+          <select id="subscriptionPlan">
+            <option value="enterprise" selected>Enterprise ✅</option>
+            <option value="hot">Hot (Will be blocked)</option>
+            <option value="pro">Pro (Will be blocked)</option>
+            <option value="premium">Premium (Will be blocked)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Ad Title</label>
+          <input type="text" id="adTitle" placeholder="Enter compelling headline..." 
+                 value="Transform Your Home with AI-Powered Smart Tech - 50% Off Limited Time">
+        </div>
+        
+        <div class="form-group">
+          <label>Ad Description</label>
+          <textarea id="adDescription" placeholder="Enter full ad description...">Discover the future of home automation. Our AI-powered smart home system learns your habits, saves energy, and gives you complete control from anywhere. 
+
+✨ Features:
+- Voice control with all major assistants
+- Energy savings up to 30%
+- Easy DIY installation
+- 24/7 customer support
+
+🔥 Limited Time: 50% off installation + FREE smart doorbell ($199 value)
+
+Join 100,000+ happy homeowners. Satisfaction guaranteed or your money back.</textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>Media Type</label>
+          <select id="mediaType">
+            <option value="image">Image</option>
+            <option value="video" selected>Video</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Ad Category</label>
+          <select id="adCategory">
+            <option value="Tech" selected>Tech</option>
+            <option value="Fashion">Fashion</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Health">Health</option>
+            <option value="Home">Home</option>
+            <option value="Automotive">Automotive</option>
+            <option value="Food">Food</option>
+            <option value="Services">Services</option>
+            <option value="General">General</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Global Reach Countries (AI-selected)</label>
+          <div class="checkbox-group">
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="United States" checked>
+              United States
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Canada" checked>
+              Canada
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="United Kingdom" checked>
+              United Kingdom
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Germany" checked>
+              Germany
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Australia">
+              Australia
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="France">
+              France
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Japan">
+              Japan
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="UAE">
+              UAE
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Singapore">
+              Singapore
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="country" value="Nigeria">
+              Nigeria
+            </label>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Audience Targeting</label>
+          <input type="text" id="audienceTargeting" 
+                 value="Tech enthusiasts 30-50, homeowners, early adopters, smart home interested">
+        </div>
+        
+        <div class="form-group">
+          <label>Attention Score (0-100, optional)</label>
+          <input type="number" id="attentionScore" min="0" max="100" value="78">
+        </div>
+        
+        <h2>📊 Competitor Insights (Optional)</h2>
+        
+        <div class="form-group">
+          <label>Market Saturation Level</label>
+          <select id="saturationLevel">
+            <option value="">Not specified</option>
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        
+        <button class="btn-primary" onclick="analyzeAd()">🔍 Generate Ad Doctor Report</button>
+        <button class="btn-ai" onclick="analyzeAdWithAI()">🤖 Generate AI-Enhanced Report</button>
+      </div>
+      
+      <!-- Results Panel -->
+      <div class="card">
+        <h2>📋 Ad Doctor Report</h2>
+        
+        <div id="loading">
+          <div class="spinner"></div>
+          <p>Analyzing your advertisement...</p>
+        </div>
+        
+        <div id="results"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000';
+    
+    function getFormData() {
+      const countries = [];
+      document.querySelectorAll('input[name="country"]:checked').forEach(cb => {
+        countries.push(cb.value);
+      });
+      
+      const saturation = document.getElementById('saturationLevel').value;
+      const competitorInsights = saturation ? { saturationLevel: saturation } : null;
+      
+      return {
+        subscriptionPlan: document.getElementById('subscriptionPlan').value,
+        adTitle: document.getElementById('adTitle').value,
+        adDescription: document.getElementById('adDescription').value,
+        mediaType: document.getElementById('mediaType').value,
+        adCategory: document.getElementById('adCategory').value,
+        globalReachCountries: countries,
+        audienceTargeting: document.getElementById('audienceTargeting').value,
+        attentionScore: parseInt(document.getElementById('attentionScore').value) || null,
+        competitorInsights: competitorInsights
+      };
+    }
+    
+    async function analyzeAd() {
+      await callAPI('/ads/improvement/enterprise/ad-doctor');
+    }
+    
+    async function analyzeAdWithAI() {
+      await callAPI('/ads/improvement/enterprise/ad-doctor-ai');
+    }
+    
+    async function callAPI(endpoint) {
+      const loading = document.getElementById('loading');
+      const results = document.getElementById('results');
+      
+      loading.style.display = 'block';
+      results.innerHTML = '';
+      
+      try {
+        const response = await fetch(API_BASE + endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getFormData())
+        });
+        
+        const data = await response.json();
+        loading.style.display = 'none';
+        
+        if (!response.ok || data.error) {
+          results.innerHTML = `
+            <div class="error-box">
+              <h3>⚠️ Access Denied</h3>
+              <p>${data.error || 'Unknown error occurred'}</p>
+              ${data.requiredPlan ? `<p>Required Plan: <strong>${data.requiredPlan}</strong></p>` : ''}
+            </div>
+          `;
+          return;
+        }
+        
+        renderReport(data);
+        
+      } catch (err) {
+        loading.style.display = 'none';
+        results.innerHTML = `
+          <div class="error-box">
+            <h3>🔌 Connection Error</h3>
+            <p>Could not connect to the server. Make sure the backend is running on port 3000.</p>
+            <p>Error: ${err.message}</p>
+          </div>
+        `;
+      }
+    }
+    
+    function renderReport(data) {
+      const scoreClass = data.adHealthScore >= 75 ? 'score-high' : 
+                         data.adHealthScore >= 50 ? 'score-medium' : 'score-low';
+      
+      let html = `
+        <div class="result-section">
+          <div class="result-header">
+            <div>
+              <span class="badge">${data.plan}</span>
+              <span style="margin-left: 10px; color: #a0a0a0;">${data.aiLevel}</span>
+            </div>
+            <div class="score-badge ${scoreClass}">
+              ${data.adHealthScore}/100
+            </div>
+          </div>
+        </div>
+        
+        <div class="tabs">
+          <div class="tab active" onclick="showTab('diagnosis')">Diagnosis</div>
+          <div class="tab" onclick="showTab('markets')">Markets</div>
+          <div class="tab" onclick="showTab('strategy')">Strategy</div>
+          <div class="tab" onclick="showTab('plan')">Treatment</div>
+          <div class="tab" onclick="showTab('raw')">Raw JSON</div>
+        </div>
+        
+        <div id="tab-diagnosis" class="tab-content active">
+          <h2>🩺 Ad Diagnosis</h2>
+          <ul class="diagnosis-list">
+            ${data.diagnosis.map(d => {
+              let cls = 'improvement';
+              if (d.includes('✅')) cls = 'strong';
+              else if (d.includes('🚨')) cls = 'critical';
+              return `<li class="${cls}">${d}</li>`;
+            }).join('')}
+          </ul>
+        </div>
+        
+        <div id="tab-markets" class="tab-content">
+          <h2>🌍 Priority Countries</h2>
+          ${data.priorityCountries.map(c => `
+            <div class="country-card">
+              <div class="country-name">${c.country}</div>
+              <div class="country-stats">
+                <div><span class="stat">Engagement:</span> <span class="stat-value">${c.engagementProbability}</span></div>
+                <div><span class="stat">Demand:</span> <span class="stat-value">${c.demandSignal}</span></div>
+                <div><span class="stat">Competition:</span> <span class="stat-value">${c.competitionDensity}</span></div>
+                <div><span class="stat">Peak Hours:</span> <span class="stat-value">${c.peakHours}</span></div>
+              </div>
+              <p style="margin-top: 10px; font-size: 0.9rem; color: #feca57;">${c.recommendation}</p>
+            </div>
+          `).join('')}
+          
+          <h2 style="margin-top: 25px;">🚀 Emerging Markets</h2>
+          ${data.emergingMarkets.map(m => `
+            <div class="country-card">
+              <div class="country-name">${m.country}</div>
+              <p style="color: #00d46a; margin: 8px 0;">${m.reason}</p>
+              <div class="country-stats">
+                <div><span class="stat">Growth Rate:</span> <span class="stat-value">${m.growthRate}</span></div>
+                <div><span class="stat">Competition:</span> <span class="stat-value">${m.competitionLevel}</span></div>
+              </div>
+              <p style="margin-top: 10px; font-size: 0.9rem; color: #a0a0a0;">${m.suggestion}</p>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div id="tab-strategy" class="tab-content">
+          <h2>⚔️ Competitor Strategy</h2>
+          <ul class="strategy-list">
+            ${data.competitorStrategy.map(s => `<li>${s}</li>`).join('')}
+          </ul>
+          
+          <h2>👥 Audience Strategy</h2>
+          <ul class="strategy-list">
+            ${data.audienceStrategy.map(s => `<li>${s}</li>`).join('')}
+          </ul>
+          
+          <h2>⏰ Best Posting Times</h2>
+          <ul class="strategy-list">
+            ${data.bestPostingTime.map(t => `<li>${t}</li>`).join('')}
+          </ul>
+        </div>
+        
+        <div id="tab-plan" class="tab-content">
+          <h2>💊 Treatment Plan</h2>
+          <ul class="treatment-plan">
+            ${data.treatmentPlan.map(p => `<li>${p}</li>`).join('')}
+          </ul>
+        </div>
+        
+        <div id="tab-raw" class="tab-content">
+          <h2>📄 Raw JSON Response</h2>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+        </div>
+      `;
+      
+      document.getElementById('results').innerHTML = html;
+    }
+    
+    function showTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById('tab-' + tabName).classList.add('active');
+    }
+  </script>
+</body>
+</html>

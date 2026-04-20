@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: elh-backend
+    env: node
+    rootDir: .
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    autoDeploy: true

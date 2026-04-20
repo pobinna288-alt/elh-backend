@@ -1,0 +1,82 @@
+# ========================================
+# SECURITY: NEVER COMMIT THESE FILES
+# ========================================
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+*.pem
+*.key
+*.cert
+secrets/
+credentials/
+
+# Dependencies
+node_modules/
+bower_components/
+jspm_packages/
+
+# Build output
+dist/
+build/
+.next/
+out/
+.cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Testing
+coverage/
+.nyc_output/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Uploads & Temporary Files
+uploads/
+temp/
+tmp/
+*.tmp
+*.bak
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

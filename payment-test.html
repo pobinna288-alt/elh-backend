@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paystack Payment Test</title>
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .pricing-plans {
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .plan {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .plan:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .plan.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .plan-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .plan-price {
+            color: #667eea;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .test-card {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .test-card strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 Paystack Payment Test</h1>
+        <p class="subtitle">Test your payment integration</p>
+
+        <div class="instructions">
+            📝 <strong>Instructions:</strong><br>
+            1. Select a plan below<br>
+            2. Enter your email<br>
+            3. Click "Pay Now" to test the payment<br>
+            4. Use test card details provided below
+        </div>
+
+        <div class="pricing-plans">
+            <div class="plan" onclick="selectPlan('premium', 15000)">
+                <div class="plan-name">Premium</div>
+                <div class="plan-price">$20 / 20,000 coins</div>
+            </div>
+            <div class="plan selected" onclick="selectPlan('pro', 200000)">
+                <div class="plan-name">Pro</div>
+                <div class="plan-price">₦200,000</div>
+            </div>
+            <div class="plan" onclick="selectPlan('hot', 1000000)">
+                <div class="plan-name">Hot</div>
+                <div class="plan-price">₦1,000,000</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" placeholder="your@email.com" value="test@example.com">
+        </div>
+
+        <div class="form-group">
+            <label for="apiUrl">Backend API URL</label>
+            <input type="text" id="apiUrl" placeholder="http://localhost:5000" value="http://localhost:5000">
+        </div>
+
+        <button class="btn" onclick="startPayment()">
+            💳 Pay Now
+        </button>
+
+        <div class="test-card">
+            <strong>Test Card Details:</strong><br>
+            Card: 5531886652142950<br>
+            Expiry: 09/32 | CVV: 564
+        </div>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        // Configuration
+        let selectedPlan = 'pro';
+        let selectedAmount = 200000;
+        const PAYSTACK_PUBLIC_KEY = (typeof process !== 'undefined' && process.env && process.env.PAYSTACK_PUBLIC_KEY)
+            ? process.env.PAYSTACK_PUBLIC_KEY
+            : '';
+
+        // Select plan
+        function selectPlan(plan, amount) {
+            selectedPlan = plan;
+            selectedAmount = amount;
+
+            // Update UI
+            document.querySelectorAll('.plan').forEach(p => p.classList.remove('selected'));
+            event.target.closest('.plan').classList.add('selected');
+        }
+
+        // Show result message
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+        }
+
+        // Initialize payment with backend
+        async function initializePayment(email, amount) {
+            const apiUrl = document.getElementById('apiUrl').value;
+
+            try {
+                showResult('Initializing payment...', 'info');
+
+                const response = await fetch(`${apiUrl}/api/initialize-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        amount: amount
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    return data.data;
+                } else {
+                    throw new Error(data.message || 'Failed to initialize payment');
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Verify payment with backend
+        async function verifyPayment(reference) {
+            const apiUrl = document.getElementById('apiUrl').value;
+
+            try {
+                showResult('Verifying payment...', 'info');
+
+                const response = await fetch(`${apiUrl}/api/verify-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reference })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showResult(
+                        `✅ Payment Successful! Amount: ₦${data.data.amount.toLocaleString()} | Email: ${data.data.customerEmail}`,
+                        'success'
+                    );
+                } else {
+                    showResult('❌ Payment verification failed', 'error');
+                }
+
+                return data;
+            } catch (error) {
+                showResult(`Verification Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Start payment process
+        async function startPayment() {
+            const email = document.getElementById('email').value;
+
+            if (!email) {
+                showResult('Please enter your email', 'error');
+                return;
+            }
+
+            try {
+                // Method 1: Using backend initialization (recommended)
+                const paymentData = await initializePayment(email, selectedAmount);
+
+                // Redirect to Paystack checkout
+                // window.location.href = paymentData.authorizationUrl;
+
+                // Method 2: Using Paystack Inline (Popup) - Better UX
+                payWithPaystackInline(email, paymentData.reference);
+
+            } catch (error) {
+                console.error('Payment error:', error);
+            }
+        }
+
+        // Pay with Paystack Inline (Popup)
+        function payWithPaystackInline(email, reference) {
+            const handler = PaystackPop.setup({
+                key: PAYSTACK_PUBLIC_KEY,
+                email: email,
+                amount: selectedAmount * 100, // Convert to kobo
+                currency: 'NGN',
+                ref: reference || 'ref_' + Math.floor(Math.random() * 1000000000),
+                
+                metadata: {
+                    custom_fields: [
+                        {
+                            display_name: "Plan",
+                            variable_name: "plan",
+                            value: selectedPlan
+                        }
+                    ]
+                },
+
+                callback: function(response) {
+                    // Payment successful
+                    console.log('Payment successful:', response);
+                    verifyPayment(response.reference);
+                },
+
+                onClose: function() {
+                    showResult('Payment window closed', 'info');
+                }
+            });
+
+            handler.openIframe();
+        }
+
+        // Alternative: Pay with redirect
+        function payWithRedirect(authorizationUrl) {
+            window.location.href = authorizationUrl;
+        }
+    </script>
+</body>
+</html>

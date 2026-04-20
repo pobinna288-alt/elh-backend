@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Improvement Report - API Tester</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button.secondary {
+            background: #6c757d;
+        }
+        button.success {
+            background: #28a745;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .result.success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .result.error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge.pro { background: #17a2b8; color: white; }
+        .badge.hot { background: #fd7e14; color: white; }
+        .badge.enterprise { background: #6f42c1; color: white; }
+        .badge.blocked { background: #dc3545; color: white; }
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .tier-info {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .tier-card {
+            flex: 1;
+            min-width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .tier-card h4 {
+            margin: 0 0 10px;
+        }
+        .tier-card ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 Ad Improvement Report - API Tester</h1>
+    
+    <div class="info-box">
+        <strong>Access Control:</strong> Only <span class="badge pro">Pro</span> 
+        <span class="badge hot">Hot</span> <span class="badge enterprise">Enterprise</span> 
+        users can access this feature. 
+        <span class="badge blocked">Normal</span> and <span class="badge blocked">Premium</span> 
+        users are blocked.
+    </div>
+
+    <div class="section">
+        <h2>📊 Feature Comparison by Tier</h2>
+        <div class="tier-info">
+            <div class="tier-card">
+                <h4><span class="badge pro">Pro</span> Features</h4>
+                <ul>
+                    <li>Basic issue detection</li>
+                    <li>1-2 recommendations</li>
+                    <li>Success probability</li>
+                </ul>
+            </div>
+            <div class="tier-card">
+                <h4><span class="badge hot">Hot</span> Features</h4>
+                <ul>
+                    <li>Advanced issue detection</li>
+                    <li>Up to 5 recommendations</li>
+                    <li>Multi-tone suggestions</li>
+                    <li>Success probability</li>
+                </ul>
+            </div>
+            <div class="tier-card">
+                <h4><span class="badge enterprise">Enterprise</span> Features</h4>
+                <ul>
+                    <li>Comprehensive detection</li>
+                    <li>Up to 10 recommendations</li>
+                    <li>Multi-tone suggestions</li>
+                    <li>Global targeting insights</li>
+                    <li>Advanced optimization</li>
+                    <li>AI-enhanced suggestions</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🔍 Test Ad Improvement Report</h2>
+        <div class="grid">
+            <div>
+                <label for="subscriptionLevel">Subscription Level *</label>
+                <select id="subscriptionLevel">
+                    <option value="pro">Pro (Basic)</option>
+                    <option value="hot" selected>Hot (Advanced)</option>
+                    <option value="enterprise">Enterprise (Full)</option>
+                    <option value="premium">Premium (BLOCKED)</option>
+                    <option value="normal">Normal (BLOCKED)</option>
+                </select>
+
+                <label for="title">Ad Title *</label>
+                <input type="text" id="title" placeholder="e.g., Brand New iPhone 15 Pro Max" 
+                       value="Brand New iPhone 15 Pro Max - Limited Stock!">
+
+                <label for="description">Ad Description *</label>
+                <textarea id="description" placeholder="Detailed ad description...">Selling my iPhone 15 Pro Max in excellent condition. Comes with original box, charger, and warranty. Perfect for tech enthusiasts who want the latest Apple device. Fast shipping available!</textarea>
+
+                <label for="category">Category</label>
+                <input type="text" id="category" placeholder="e.g., Electronics, Fashion, Home" 
+                       value="Electronics">
+
+                <label for="targetAudience">Target Audience</label>
+                <input type="text" id="targetAudience" placeholder="e.g., Tech enthusiasts 25-45" 
+                       value="Tech enthusiasts 25-45">
+
+                <label for="attentionScore">Attention Score (0-100)</label>
+                <input type="number" id="attentionScore" min="0" max="100" placeholder="Optional" value="">
+            </div>
+            <div>
+                <label>Quick Test Scenarios</label>
+                <button onclick="loadScenario('good')">✅ Good Ad Example</button>
+                <button onclick="loadScenario('bad')" class="danger">❌ Poor Ad Example</button>
+                <button onclick="loadScenario('medium')" class="secondary">🔄 Average Ad</button>
+                
+                <label style="margin-top: 20px">Run Analysis</label>
+                <button onclick="analyzeAd()" class="success">🚀 Generate Report</button>
+                <button onclick="analyzeAdAI()">🤖 Generate AI-Enhanced Report</button>
+                <button onclick="realTimeAnalysis()" class="secondary">⚡ Real-Time Check</button>
+                <button onclick="checkFeatures()" class="secondary">ℹ️ Check Features</button>
+            </div>
+        </div>
+        
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="section">
+        <h2>🧪 Access Control Test</h2>
+        <p>Test that Normal and Premium users are properly blocked:</p>
+        <button onclick="testBlocked('normal')" class="danger">Test Normal User (Should Fail)</button>
+        <button onclick="testBlocked('premium')" class="danger">Test Premium User (Should Fail)</button>
+        <button onclick="testBlocked('pro')" class="success">Test Pro User (Should Work)</button>
+        <div id="accessResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="section">
+        <h2>📡 API Endpoints Reference</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background: #f0f0f0;">
+                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Method</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Endpoint</th>
+                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Description</th>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>POST</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>/ads/improvement/analyze</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">Generate full ad improvement report</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>POST</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>/ads/improvement/analyze-ai</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">AI-enhanced report (Enterprise)</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>POST</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>/ads/improvement/real-time</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">Real-time feedback for edits</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>GET</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>/ads/improvement/features</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">Get features by subscription</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>GET</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;"><code>/ads/improvement/docs</code></td>
+                <td style="padding: 10px; border: 1px solid #ddd;">API documentation</td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+
+        const scenarios = {
+            good: {
+                title: 'Premium MacBook Pro 2026 - Save $200 Today Only!',
+                description: 'Brand new MacBook Pro with M4 chip at an unbeatable price of $2,299 (normally $2,499). Features: 16GB RAM, 1TB SSD, stunning Retina display. Perfect for professionals and creatives. Includes 1-year warranty and free shipping. Over 500+ satisfied customers. Order now and get a free carrying case! Limited stock available.',
+                category: 'Electronics',
+                targetAudience: 'Professional creatives and developers 28-45',
+                attentionScore: 85
+            },
+            bad: {
+                title: 'selling stuff',
+                description: 'good item for sale contact me',
+                category: '',
+                targetAudience: '',
+                attentionScore: 20
+            },
+            medium: {
+                title: 'iPhone 15 Pro Max For Sale',
+                description: 'Selling my iPhone 15 Pro Max. Good condition, works perfectly. Comes with charger. Message me if interested.',
+                category: 'Electronics',
+                targetAudience: 'everyone',
+                attentionScore: 55
+            }
+        };
+
+        function loadScenario(type) {
+            const s = scenarios[type];
+            document.getElementById('title').value = s.title;
+            document.getElementById('description').value = s.description;
+            document.getElementById('category').value = s.category;
+            document.getElementById('targetAudience').value = s.targetAudience;
+            document.getElementById('attentionScore').value = s.attentionScore || '';
+        }
+
+        function showResult(elementId, data, isError = false) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.className = 'result ' + (isError ? 'error' : 'success');
+            el.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function analyzeAd() {
+            const payload = {
+                subscriptionLevel: document.getElementById('subscriptionLevel').value,
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                category: document.getElementById('category').value,
+                targetAudience: document.getElementById('targetAudience').value
+            };
+            
+            const attentionScore = document.getElementById('attentionScore').value;
+            if (attentionScore) {
+                payload.attentionScore = parseInt(attentionScore);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/ads/improvement/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                showResult('result', data, !data.success);
+            } catch (error) {
+                showResult('result', { error: error.message }, true);
+            }
+        }
+
+        async function analyzeAdAI() {
+            const payload = {
+                subscriptionLevel: document.getElementById('subscriptionLevel').value,
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                category: document.getElementById('category').value,
+                targetAudience: document.getElementById('targetAudience').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/ads/improvement/analyze-ai`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                showResult('result', data, !data.success);
+            } catch (error) {
+                showResult('result', { error: error.message }, true);
+            }
+        }
+
+        async function realTimeAnalysis() {
+            const payload = {
+                subscriptionLevel: document.getElementById('subscriptionLevel').value,
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/ads/improvement/real-time`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                showResult('result', data, !data.success);
+            } catch (error) {
+                showResult('result', { error: error.message }, true);
+            }
+        }
+
+        async function checkFeatures() {
+            const level = document.getElementById('subscriptionLevel').value;
+            try {
+                const response = await fetch(`${API_BASE}/ads/improvement/features?subscriptionLevel=${level}`);
+                const data = await response.json();
+                showResult('result', data, !data.success);
+            } catch (error) {
+                showResult('result', { error: error.message }, true);
+            }
+        }
+
+        async function testBlocked(level) {
+            const payload = {
+                subscriptionLevel: level,
+                title: 'Test Ad',
+                description: 'Test description for access control verification.'
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/ads/improvement/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                const isBlocked = !data.success && response.status === 403;
+                const expectedBlocked = ['normal', 'premium'].includes(level);
+                
+                const result = {
+                    testedLevel: level,
+                    expectedBlocked: expectedBlocked,
+                    actuallyBlocked: isBlocked,
+                    testPassed: expectedBlocked === isBlocked,
+                    response: data
+                };
+                
+                showResult('accessResult', result, !result.testPassed);
+            } catch (error) {
+                showResult('accessResult', { error: error.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>
