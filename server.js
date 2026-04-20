@@ -47,84 +47,55 @@ const {
 // SERVER CONFIGURATION
 // ============================================
 
+const express = require("express");
 const app = express();
 
-// HEALTH CHECK ROUTE
+// ================= MIDDLEWARE =================
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ================= HEALTH CHECK =================
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     success: true,
-    message: "Backend is running"
+    message: "Backend is running 🚀",
   });
 });
 
+// ================= CONFIG =================
 const PORT = process.env.PORT || 4010;
+const HOST = process.env.HOST || "0.0.0.0";
 
 const REQUEST_TIMEOUT_MIN_MS = 10000;
 const REQUEST_TIMEOUT_MAX_MS = 15000;
 const REQUEST_TIMEOUT_DEFAULT_MS = 15000;
 
-const REQUEST_TIMEOUT_MS = resolveRequestTimeoutMs(process.env.REQUEST_TIMEOUT_MS);
-
-const EXTERNAL_CALL_TIMEOUT_MS = Number(process.env.EXTERNAL_CALL_TIMEOUT_MS || 12000);
-const RESTART_DELAY_MS = Number(process.env.RESTART_DELAY_MS || 2000);
-const MAX_RESTART_ATTEMPTS = Number(process.env.MAX_RESTART_ATTEMPTS || 20);
-
-const HOST = process.env.HOST || "0.0.0.0";
-
-const BASE_URL = `${process.env.BASE_URL || ""}`.trim().replace(/\/+$/, "");
-
-let isManualShutdownRequested = false;
-let restartAttempts = 0;
-let restartTimer = null;
-
-const startupReadiness = {
-  envValidated: false,
-  paymentModuleLoaded: false,
-  databaseConnected: false,
-  degradedMode: false,
-  degradedReasons: [],
-};
-
-const EXPRESS_ROUTE_METHODS = ["get", "post", "put", "patch", "delete", "options", "head", "all"];
-
 function resolveRequestTimeoutMs(rawTimeoutMs) {
   const parsed = Number.parseInt(`${rawTimeoutMs ?? ""}`.trim(), 10);
+
   if (!Number.isFinite(parsed)) {
     return REQUEST_TIMEOUT_DEFAULT_MS;
   }
 
   if (parsed < REQUEST_TIMEOUT_MIN_MS) {
-    console.warn(`⚠ REQUEST_TIMEOUT_MS=${parsed} is below supported minimum. Using ${REQUEST_TIMEOUT_MIN_MS}ms.`);
     return REQUEST_TIMEOUT_MIN_MS;
   }
 
   if (parsed > REQUEST_TIMEOUT_MAX_MS) {
-    console.warn(`⚠ REQUEST_TIMEOUT_MS=${parsed} is above supported maximum. Using ${REQUEST_TIMEOUT_MAX_MS}ms.`);
     return REQUEST_TIMEOUT_MAX_MS;
   }
 
   return parsed;
 }
 
-function isRoutePathArgument(value) {
-  if (typeof value === "string" || value instanceof RegExp) {
-    return true;
-  }
+const REQUEST_TIMEOUT_MS = resolveRequestTimeoutMs(process.env.REQUEST_TIMEOUT_MS);
+const EXTERNAL_CALL_TIMEOUT_MS = Number(process.env.EXTERNAL_CALL_TIMEOUT_MS || 12000);
 
-  if (Array.isArray(value) && value.length > 0) {
-    return value.every((item) => typeof item === "string" || item instanceof RegExp);
-  }
-
-  return false;
-}
-
-function wrapAsyncHandler(handler) {
-  if (typeof handler !== "function") {
-    return handler;
-  }
-
-  if (handler.length >= 4) {
+// ================= START SERVER =================
+app.listen(PORT, HOST, () => {
+  console.log(`🔥 Server running on http://${HOST}:${PORT}`);
+});
     // Keep error middleware signatures intact.
     return handler;
   }
