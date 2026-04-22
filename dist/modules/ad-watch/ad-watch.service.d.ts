@@ -1,0 +1,41 @@
+import { Repository, DataSource } from 'typeorm';
+import { AdView } from './entities/ad-view.entity';
+import { CoinTransaction } from './entities/coin-transaction.entity';
+import { CoinBoostEvent } from './entities/coin-boost-event.entity';
+import { User } from '../users/entities/user.entity';
+import { Ad } from '../ads/entities/ad.entity';
+import { AdProgressDto, AdProgressResponseDto, WatchSessionResponseDto, AdCompletionResponseDto, WatchStatsResponseDto } from './dto/ad-watch.dto';
+export declare class AdWatchService {
+    private readonly adViewRepository;
+    private readonly coinTransactionRepository;
+    private readonly boostEventRepository;
+    private readonly userRepository;
+    private readonly adRepository;
+    private readonly dataSource;
+    private readonly logger;
+    constructor(adViewRepository: Repository<AdView>, coinTransactionRepository: Repository<CoinTransaction>, boostEventRepository: Repository<CoinBoostEvent>, userRepository: Repository<User>, adRepository: Repository<Ad>, dataSource: DataSource);
+    startWatchSession(userId: string, adId: string): Promise<WatchSessionResponseDto>;
+    processAdProgress(userId: string, dto: AdProgressDto): Promise<AdProgressResponseDto>;
+    getWatchStats(userId: string): Promise<WatchStatsResponseDto>;
+    getAdCompletionStatus(userId: string, adId: string): Promise<AdCompletionResponseDto>;
+    private getAdTier;
+    private calculateMilestoneRewards;
+    private processMilestones;
+    private grantCoins;
+    private getMilestoneCoins;
+    private validateWatchProgress;
+    private updateWatchStreak;
+    private grantStreakBonus;
+    private getActiveBoostEvent;
+    createBoostEvent(data: {
+        name: string;
+        description?: string;
+        multiplier: number;
+        startTime: Date;
+        endTime: Date;
+        eligibleTiers?: string[];
+        maxTotalCoins?: number;
+    }): Promise<CoinBoostEvent>;
+    deactivateBoostEvent(eventId: string): Promise<void>;
+    getAllBoostEvents(): Promise<CoinBoostEvent[]>;
+}

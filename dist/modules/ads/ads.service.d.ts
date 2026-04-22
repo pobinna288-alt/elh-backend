@@ -1,0 +1,35 @@
+import { Repository } from 'typeorm';
+import { Ad } from './entities/ad.entity';
+import { User } from '../users/entities/user.entity';
+import { CreateAdDto, UpdateAdDto, FilterAdsDto } from './dto/ad.dto';
+import { RedisService } from '../redis/redis.service';
+import { CachingService } from '../../common/caching/caching.service';
+import { PaginatedResponseDto } from '../../common/dto/pagination.dto';
+import { CurrencyService } from './currency.service';
+export declare class AdsService {
+    private adsRepository;
+    private usersRepository;
+    private redisService;
+    private cachingService;
+    private currencyService;
+    private readonly logger;
+    constructor(adsRepository: Repository<Ad>, usersRepository: Repository<User>, redisService: RedisService, cachingService: CachingService, currencyService: CurrencyService);
+    create(createAdDto: CreateAdDto, userId: string): Promise<Ad>;
+    private getUserTier;
+    private validateVideoForTier;
+    private calculateQualityScore;
+    private normalizePagination;
+    private invalidateAdReadCaches;
+    private isUserPremium;
+    findAll(filterDto: FilterAdsDto): Promise<PaginatedResponseDto<Ad>>;
+    findOne(id: string): Promise<Ad>;
+    update(id: string, updateAdDto: UpdateAdDto, userId: string): Promise<Ad>;
+    remove(id: string, userId: string): Promise<void>;
+    incrementViews(id: string): Promise<void>;
+    incrementClicks(id: string): Promise<void>;
+    likeAd(id: string): Promise<void>;
+    dislikeAd(id: string): Promise<void>;
+    shareAd(id: string): Promise<void>;
+    getTrending(limit?: number): Promise<Ad[]>;
+    getUserAds(userId: string, filterDto?: FilterAdsDto): Promise<PaginatedResponseDto<Ad>>;
+}

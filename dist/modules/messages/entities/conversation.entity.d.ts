@@ -1,0 +1,41 @@
+import { User } from '../../users/entities/user.entity';
+import { Ad } from '../../ads/entities/ad.entity';
+import { Message } from './message.entity';
+export declare class Conversation {
+    id: string;
+    buyer: User;
+    buyerId: string;
+    seller: User;
+    sellerId: string;
+    ad: Ad;
+    adId: string;
+    productName: string;
+    productPrice: number;
+    productCurrency: string;
+    productThumbnail: string;
+    lastMessageContent: string;
+    lastMessageAt: Date;
+    lastMessageSenderId: string;
+    buyerUnreadCount: number;
+    sellerUnreadCount: number;
+    isActive: boolean;
+    isArchivedByBuyer: boolean;
+    isArchivedBySeller: boolean;
+    isBlockedByBuyer: boolean;
+    isBlockedBySeller: boolean;
+    averageResponseTime: number;
+    sellerMessageCount: number;
+    totalResponseTime: number;
+    messages: Message[];
+    createdAt: Date;
+    updatedAt: Date;
+    getSellerResponseIndicator(): string;
+    getProductCard(): {
+        productName: string;
+        productPrice: number;
+        productCurrency: string;
+        productThumbnail: string;
+        sellerName: string;
+        sellerId: string;
+    };
+}
