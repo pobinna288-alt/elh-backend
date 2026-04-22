@@ -9,6 +9,7 @@ const axios = require("axios");
 const app = express();
 const PORT = Number(process.env.PORT) || 4010;
 const PAYSTACK_INITIALIZE_URL = "https://api.paystack.co/transaction/initialize";
+const PAYSTACK_VERIFY_URL = "https://api.paystack.co/transaction/verify";
 
 app.use(cors());
 app.use(express.json());
@@ -84,6 +85,70 @@ app.post("/api/payments/initialize", async (req, res) => {
       return res.status(503).json({
         success: false,
         message: "Payment provider unavailable"
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+app.get("/api/payments/verify/:reference", async (req, res) => {
+  const reference = String(req.params?.reference || "").trim();
+
+  if (!reference) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid payment reference"
+    });
+  }
+
+  const paystackSecretKey = String(process.env.PAYSTACK_SECRET_KEY || "").trim();
+  if (!paystackSecretKey) {
+    return res.status(500).json({
+      success: false,
+      message: "Payment service not configured"
+    });
+  }
+
+  try {
+    const response = await axios.get(`${PAYSTACK_VERIFY_URL}/${encodeURIComponent(reference)}`, {
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 10000
+    });
+
+    const paystackPayload = response?.data;
+    const tx = paystackPayload?.data;
+    const isSuccessful = Boolean(paystackPayload?.status) && tx?.status === "success";
+
+    return res.status(200).json({
+      success: isSuccessful,
+      message: isSuccessful ? "Payment verified successfully" : "Payment not successful",
+      data: {
+        reference: tx?.reference || reference,
+        payment_status: tx?.status || "unknown",
+        amount: Number.isFinite(Number(tx?.amount)) ? Number(tx.amount) / 100 : null,
+        currency: tx?.currency || null,
+        paid_at: tx?.paid_at || null,
+        channel: tx?.channel || null
+      }
+    });
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const providerMessage =
+        error.response?.data?.message ||
+        (error.code === "ECONNABORTED" ? "Payment verification timed out" : "Payment provider unavailable");
+
+      const statusCode = error.response?.status && error.response.status >= 400 && error.response.status < 500 ? 400 : 503;
+
+      return res.status(statusCode).json({
+        success: false,
+        message: providerMessage
       });
     }
 
