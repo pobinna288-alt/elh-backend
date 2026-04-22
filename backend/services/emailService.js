@@ -23,44 +23,46 @@ const EMAIL_CONFIG = {
 // SMTP TRANSPORT (optional – requires nodemailer + SMTP_HOST env var)
 // ============================================
 
-/**
- * Assert that SMTP is fully configured for production.
- * Call this once at app startup so the process refuses to start in a
- * misconfigured state rather than silently skipping email delivery.
- *
- * Required in production: SMTP_HOST, SMTP_USER, SMTP_PASS
- */
-const assertSmtpConfigured = () => {
-  if (process.env.NODE_ENV !== "production") return;
-  const missing = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"].filter(
-    (k) => !process.env[k]
+const SMTP_REQUIRED_ENV = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"];
+let _smtpDisabledWarned = false;
+
+const getMissingSmtpEnv = () =>
+  SMTP_REQUIRED_ENV.filter((k) => !process.env[k]);
+
+const warnSmtpDisabled = (missing = []) => {
+  if (_smtpDisabledWarned) return;
+  const suffix = missing.length > 0 ? ` Missing: ${missing.join(", ")}.` : "";
+  console.warn(
+    `[EmailService] SMTP not configured - email service disabled in MVP mode.${suffix}`
   );
-  if (missing.length > 0) {
-    throw new Error(
-      `[EmailService] PRODUCTION STARTUP BLOCKED: Missing required SMTP ` +
-      `env vars: ${missing.join(", ")}. ` +
-      "Set SMTP_HOST, SMTP_USER, and SMTP_PASS before starting the server."
-    );
-  }
+  _smtpDisabledWarned = true;
 };
 
 /**
- * Lazily create a nodemailer transporter when SMTP_HOST is configured.
- * Throws immediately in production if SMTP_HOST is missing so there is
- * no silent fall-through to console logging.
+ * Validate SMTP configuration at startup without blocking process boot.
+ * Returns an enabled/disabled state that callers can inspect if needed.
+ */
+const assertSmtpConfigured = () => {
+  const missing = getMissingSmtpEnv();
+  if (missing.length > 0) {
+    warnSmtpDisabled(missing);
+    return { enabled: false, missing };
+  }
+  return { enabled: true, missing: [] };
+};
+
+/**
+ * Lazily create a nodemailer transporter when SMTP is fully configured.
+ * In MVP mode, missing SMTP gracefully disables email without throwing.
  */
 let _smtpTransporter = null;
 const getSmtpTransporter = () => {
   if (_smtpTransporter) return _smtpTransporter;
 
-  if (!process.env.SMTP_HOST) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "[EmailService] SMTP_HOST is required in production. " +
-        "Set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables."
-      );
-    }
-    return null; // dev / test – console fallback allowed
+  const missing = getMissingSmtpEnv();
+  if (missing.length > 0) {
+    warnSmtpDisabled(missing);
+    return null;
   }
 
   try {
@@ -81,8 +83,8 @@ const getSmtpTransporter = () => {
       "[EmailService] nodemailer not installed. " +
       "Run `npm install nodemailer` to enable SMTP delivery. " +
       `Error: ${err.message}`;
-    if (process.env.NODE_ENV === "production") throw new Error(msg);
-    console.error(msg);
+    warnSmtpDisabled();
+    console.warn(msg);
     return null;
   }
 };
@@ -90,12 +92,12 @@ const getSmtpTransporter = () => {
 /**
  * Low-level send helper shared by all email functions.
  *
- * - In production:  sends via SMTP (nodemailer). Throws if SMTP is not
- *   configured so callers can surface a real error to the user.
+ * - In production: sends via SMTP when configured, otherwise returns a
+ *   disabled state without crashing the server.
  * - In development: logs to console when SMTP is not set up.
  */
 const dispatchEmail = async ({ to, subject, html, text }) => {
-  const transporter = getSmtpTransporter(); // throws in production when not configured
+  const transporter = getSmtpTransporter();
 
   if (transporter) {
     const info = await transporter.sendMail({
@@ -108,7 +110,15 @@ const dispatchEmail = async ({ to, subject, html, text }) => {
     return { success: true, messageId: info.messageId, provider: "smtp" };
   }
 
-  // Reach here only in non-production (getSmtpTransporter throws for production)
+  if (process.env.NODE_ENV === "production") {
+    return {
+      success: false,
+      disabled: true,
+      messageId: null,
+      provider: "disabled",
+    };
+  }
+
   console.log("══════════════════════════════════════════");
   console.log(`📧  EMAIL (dev)  →  ${to}`);
   console.log(`    Subject : ${subject}`);
