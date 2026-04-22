@@ -19,11 +19,12 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// 🔥 PAYSTACK INITIALIZE ROUTE (THIS WAS MISSING)
+// Paystack initialize payment
 app.post("/api/payments/initialize", async (req, res) => {
   try {
     const { email, amount } = req.body;
 
+    // validation
     if (!email || !amount) {
       return res.status(400).json({
         success: false,
@@ -31,26 +32,31 @@ app.post("/api/payments/initialize", async (req, res) => {
       });
     }
 
+    // get secret key
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
     if (!PAYSTACK_SECRET_KEY) {
       return res.status(500).json({
         success: false,
-        message: "PAYSTACK_SECRET_KEY is not configured"
+        message: "Payment service not configured"
       });
     }
+
+    // PAYSTACK expects KOBO (₦1 = 100 kobo)
+    const amountInKobo = Math.round(amount * 100);
 
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
         email,
-        amount: amount * 100 // Paystack uses kobo
+        amount: amountInKobo
       },
       {
         headers: {
           Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 10000
       }
     );
 
@@ -75,3 +81,4 @@ const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
 });
+
