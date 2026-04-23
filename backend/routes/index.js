@@ -19,7 +19,11 @@ function registerAppRoutes(app, dependencies = {}) {
   const context = createModuleContext({ ...dependencies, app });
 
   registerAuthModule(app, context);
-  registerUploadModule(app, context);
+  try {
+    registerUploadModule(app, context);
+  } catch (uploadError) {
+    console.warn("[Routes] Upload module failed to register — skipping:", uploadError.message);
+  }
   registerSubscriptionModule(app, context);
   registerPaymentModule(app, context);
   registerCoinModule(app, context);

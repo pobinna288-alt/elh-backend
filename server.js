@@ -6,6 +6,10 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
+const { randomBytes } = require("crypto");
+
+const generatePaymentReference = () =>
+  `elh_pay_${Date.now()}_${randomBytes(8).toString("hex")}`;
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4010;
@@ -183,12 +187,15 @@ app.post("/api/payments/initialize", async (req, res) => {
   const amountInNGN = amount * exchangeRate;
   const amountInKobo = Math.round(amountInNGN * 100);
 
+  const reference = generatePaymentReference();
+
   try {
     const response = await axios.post(
       PAYSTACK_INITIALIZE_URL,
       {
         email,
-        amount: amountInKobo
+        amount: amountInKobo,
+        reference
       },
       {
         headers: {
@@ -255,12 +262,15 @@ app.post("/api/payments/init", async (req, res) => {
   const amountInNGN = amount * exchangeRate;
   const amountInKobo = Math.round(amountInNGN * 100);
 
+  const reference = generatePaymentReference();
+
   try {
     const response = await axios.post(
       PAYSTACK_INITIALIZE_URL,
       {
         email,
-        amount: amountInKobo
+        amount: amountInKobo,
+        reference
       },
       {
         headers: {
