@@ -51,8 +51,16 @@ function registerVideoWatchModule(app, context = {}) {
     ? context.authenticateToken
     : (_req, res) => res.status(500).json({ success: false, error: "Watch auth middleware unavailable" });
 
+  // Skip auth for /api/messages (MVP messaging - no auth required)
+  const skipAuthForMessages = (req, res, next) => {
+    if (req.path.startsWith("/messages")) {
+      return next();
+    }
+    return requireAuth(req, res, next);
+  };
+
   app.use("/watch", requireAuth, routes.watchShortAdRoutes);
-  app.use("/api", requireAuth, routes.legacyAdWatchRoutes);
+  app.use("/api", skipAuthForMessages, routes.legacyAdWatchRoutes);
   app.use("/", aliasRouter);
 
   return {

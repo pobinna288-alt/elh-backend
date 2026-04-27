@@ -14,6 +14,7 @@ const trustScoreRoutes = require("./trustScoreRoutes");
 const { createAttentionScoreRouter } = require("./attentionScoreRoutes");
 const followSellerRoutes = require("./followSellerRoutes");
 const { initEnterpriseChatRoutes } = require("./enterpriseChatRoutes");
+const messageRoutes = require("./messageRoutes");
 
 function registerAppRoutes(app, dependencies = {}) {
   const context = createModuleContext({ ...dependencies, app });
@@ -45,6 +46,9 @@ function registerAppRoutes(app, dependencies = {}) {
     notificationFactory: context.createNotification,
   });
   app.use("/", enterpriseChatRoutes);
+
+  // Buyer-seller messaging (MVP)
+  app.use("/api/messages", messageRoutes);
 
   return context;
 }
