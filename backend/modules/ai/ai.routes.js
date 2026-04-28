@@ -288,7 +288,9 @@ async function initializeAiHealthState(options = {}) {
       closeflowDisableReasons.push("OpenAI default model unavailable");
       if (!forceCloseflow) {
         markFeatureDisabled("ad_guardian", "OpenAI default model unavailable");
-        markFeatureDisabled("closeflow", "OpenAI default model unavailable");
+        if (!marketHealth.checks.fallbackEngineWorking) {
+          markFeatureDisabled("closeflow", "OpenAI default model unavailable");
+        }
         markFeatureDisabled("ad_improvement", "OpenAI default model unavailable");
       }
     }
@@ -309,6 +311,7 @@ async function initializeAiHealthState(options = {}) {
 
     FEATURE_GATE_STATE.initialized = true;
     console.info("[AI Health] Startup checks completed", FEATURE_GATE_STATE.checks);
+    console.log("CloseFlow status:", FEATURE_GATE_STATE.disabledFeatures.has("closeflow"));
   } catch (error) {
     markFeatureDisabled("revenue_copy", `startup check failed: ${error.message}`);
     markFeatureDisabled("ad_guardian", `startup check failed: ${error.message}`);
@@ -316,6 +319,7 @@ async function initializeAiHealthState(options = {}) {
     markFeatureDisabled("demand_pulse", `startup check failed: ${error.message}`);
     markFeatureDisabled("ad_improvement", `startup check failed: ${error.message}`);
     FEATURE_GATE_STATE.initialized = true;
+    console.log("CloseFlow status:", FEATURE_GATE_STATE.disabledFeatures.has("closeflow"));
   } finally {
     FEATURE_GATE_STATE.runningCheck = false;
   }
@@ -323,6 +327,14 @@ async function initializeAiHealthState(options = {}) {
 
 function requireFeatureHealthy(featureKey) {
   return (_req, res, next) => {
+    // Allow CloseFlow during initialization if fallback engine is working
+    if (!FEATURE_GATE_STATE.initialized && featureKey === "closeflow") {
+      const fallbackWorking = FEATURE_GATE_STATE.checks?.fallbackEngineWorking === true;
+      if (fallbackWorking) {
+        return next();
+      }
+    }
+
     if (!FEATURE_GATE_STATE.initialized) {
       if (!FEATURE_GATE_STATE.runningCheck) {
         void initializeAiHealthState().catch((error) => {
@@ -337,6 +349,7 @@ function requireFeatureHealthy(featureKey) {
 
     if (FEATURE_GATE_STATE.disabledFeatures.has(featureKey)) {
       if (featureKey === "closeflow" && !FEATURE_GATE_STATE.runningCheck) {
+        console.log("CloseFlow status:", FEATURE_GATE_STATE.disabledFeatures.has("closeflow"));
         void initializeAiHealthState({ forceCloseflow: true }).catch((error) => {
           console.warn(`[AI Health] Closeflow recheck failed: ${error.message}`);
         });
@@ -793,6 +806,10 @@ function registerAiModule(app, context = {}) {
   app.use("/auto-post", requireAuth, attachResolvedPlan, routes.enterpriseAutoPostRoutes);
   app.use("/api", aliasRouter);
   app.use("/", aliasRouter);
+
+  void initializeAiHealthState().catch((error) => {
+    console.warn(`[AI Health] Startup initialization failed: ${error.message}`);
+  });
 
   return {
     ...routes,
