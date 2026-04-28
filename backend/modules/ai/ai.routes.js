@@ -243,8 +243,9 @@ async function checkOpenAiModelAccess(modelName) {
   }
 }
 
-async function initializeAiHealthState() {
-  if (FEATURE_GATE_STATE.initialized || FEATURE_GATE_STATE.runningCheck) {
+async function initializeAiHealthState(options = {}) {
+  const forceCloseflow = options && options.forceCloseflow === true;
+  if ((FEATURE_GATE_STATE.initialized && !forceCloseflow) || FEATURE_GATE_STATE.runningCheck) {
     return;
   }
 
@@ -261,27 +262,49 @@ async function initializeAiHealthState() {
       openAiLatestModelAccessible: latestModelOk,
     };
 
+    const closeflowDisableReasons = [];
+
     if (marketHealth.shouldHardDisableFeatures) {
       const reason = (marketHealth.hardDisableReasons || []).join("; ") || "market intelligence hard-disabled by configuration";
-      markFeatureDisabled("ad_guardian", reason);
-      markFeatureDisabled("demand_pulse", reason);
-      markFeatureDisabled("closeflow", reason);
+      closeflowDisableReasons.push(reason);
+
+      if (!forceCloseflow) {
+        markFeatureDisabled("ad_guardian", reason);
+        markFeatureDisabled("demand_pulse", reason);
+        markFeatureDisabled("closeflow", reason);
+      }
     } else if (Array.isArray(marketHealth.degradedReasons) && marketHealth.degradedReasons.length > 0) {
       console.warn(`[AI Health] Market intelligence degraded mode active. Reasons: ${marketHealth.degradedReasons.join("; ")}`);
     }
 
     if (!marketHealth.checks.closeflowSafetyModeEnabled && marketHealth.shouldHardDisableFeatures) {
-      markFeatureDisabled("closeflow", "closeflow safety mode disabled");
+      closeflowDisableReasons.push("closeflow safety mode disabled");
+      if (!forceCloseflow) {
+        markFeatureDisabled("closeflow", "closeflow safety mode disabled");
+      }
     }
 
     if (!defaultModelOk) {
-      markFeatureDisabled("ad_guardian", "OpenAI default model unavailable");
-      markFeatureDisabled("closeflow", "OpenAI default model unavailable");
-      markFeatureDisabled("ad_improvement", "OpenAI default model unavailable");
+      closeflowDisableReasons.push("OpenAI default model unavailable");
+      if (!forceCloseflow) {
+        markFeatureDisabled("ad_guardian", "OpenAI default model unavailable");
+        markFeatureDisabled("closeflow", "OpenAI default model unavailable");
+        markFeatureDisabled("ad_improvement", "OpenAI default model unavailable");
+      }
     }
 
-    if (!latestModelOk) {
+    if (!latestModelOk && !forceCloseflow) {
       markFeatureDisabled("revenue_copy", "OpenAI latest model unavailable");
+    }
+
+    if (forceCloseflow) {
+      if (closeflowDisableReasons.length > 0) {
+        markFeatureDisabled("closeflow", closeflowDisableReasons[0]);
+      } else {
+        FEATURE_GATE_STATE.disabledFeatures.delete("closeflow");
+      }
+    } else if (closeflowDisableReasons.length === 0) {
+      FEATURE_GATE_STATE.disabledFeatures.delete("closeflow");
     }
 
     FEATURE_GATE_STATE.initialized = true;
@@ -313,6 +336,11 @@ function requireFeatureHealthy(featureKey) {
     }
 
     if (FEATURE_GATE_STATE.disabledFeatures.has(featureKey)) {
+      if (featureKey === "closeflow" && !FEATURE_GATE_STATE.runningCheck) {
+        void initializeAiHealthState({ forceCloseflow: true }).catch((error) => {
+          console.warn(`[AI Health] Closeflow recheck failed: ${error.message}`);
+        });
+      }
       return res.status(503).json({
         success: false,
         error: `${featureKey} is temporarily unavailable due to startup safety checks`,
