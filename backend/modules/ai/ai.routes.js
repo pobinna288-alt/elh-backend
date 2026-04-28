@@ -535,6 +535,53 @@ async function handleNegotiation(req, res) {
   }
 }
 
+async function handleCloseFlowMvp(req, res) {
+  try {
+    const payload = req.body || {};
+    const budgetContext = buildBudgetContextPayload(req, payload);
+    const decision = await buildCloseFlowDecision(payload, {
+      generateTextWithAi,
+      generateJsonWithAi,
+    }, {
+      requestCycleId: getRequestCycleId(req),
+      userId: resolveUserId(req),
+      subscriptionLevel: req.subscriptionLevel,
+      budgetContext,
+      marketAccessMode: req.marketAccessMode,
+    });
+
+    const responsePayload = req.subscriptionLevel === "starter"
+      ? sanitizeStarterDecision("negotiation", decision)
+      : decision;
+
+    const userContext = {
+      ...(req.currentUser || {}),
+      ...(req.user || {}),
+      plan: req.subscriptionLevel,
+    };
+    const currencyNormalizedPayload = await formatCloseFlowCurrencyResponse(userContext, responsePayload);
+
+    const priceCandidate =
+      currencyNormalizedPayload?.recommended_price ??
+      currencyNormalizedPayload?.price ??
+      currencyNormalizedPayload?.broad_price_range?.fair ??
+      currencyNormalizedPayload?.broad_price_range?.low;
+    const price = Number.isFinite(Number(priceCandidate)) ? Number(priceCandidate) : 0;
+
+    return res.json({
+      success: true,
+      price,
+      message: "CloseFlow generated successfully",
+    });
+  } catch (err) {
+    console.error("CloseFlow error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+}
+
 async function handleDemandPulse(req, res) {
   try {
     const payload = req.body || {};
@@ -615,6 +662,24 @@ function createAiAliasRouter(routes, context = {}) {
   const router = express.Router();
   const requireAuth = getRequireAuth(context);
 
+  const requireAuthIfPresent = (req, res, next) => {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (typeof authHeader !== "string") {
+      const closeFlowMvpEnabled = `${process.env.CLOSEFLOW_MVP || ""}`.trim().toLowerCase() === "true";
+      if (!closeFlowMvpEnabled) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required"
+        });
+      }
+
+      console.log("⚠️ MVP mode: CloseFlow bypass auth");
+      return next();
+    }
+
+    return requireAuth(req, res, next);
+  };
+
   router.get("/ai/features", requireAuth, attachResolvedPlan, (_req, res) => {
     return res.json({
       success: true,
@@ -650,6 +715,15 @@ function createAiAliasRouter(routes, context = {}) {
     requireFeatureHealthy("closeflow"),
     createAiUsageGuard({ feature: "negotiation" }),
     handleNegotiation,
+  );
+
+  router.post(
+    "/closeflow",
+    requireAuthIfPresent,
+    attachResolvedPlan,
+    requireFeatureHealthy("closeflow"),
+    createAiUsageGuard({ feature: "negotiation" }),
+    handleCloseFlowMvp,
   );
 
   router.post(
