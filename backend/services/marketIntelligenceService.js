@@ -251,6 +251,11 @@ function safeEqualHex(a, b) {
 }
 
 function validateInternalAuth(feature, options = {}) {
+  // Skip internal auth validation in MVP mode
+  if (process.env.CLOSEFLOW_MVP === "true") {
+    return;
+  }
+
   if (!MARKET_INTERNAL_AUTH_SECRET) {
     const error = new Error("Market intelligence internal auth secret is not configured.");
     error.code = "MARKET_INTERNAL_AUTH_NOT_CONFIGURED";
