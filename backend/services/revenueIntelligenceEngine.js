@@ -621,60 +621,114 @@ async function buildAdGuardianDecision(input, aiTools = {}, runtime = {}) {
 }
 
 async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
-  const budgetContext = resolveRuntimeBudgetContext(input, runtime);
-  const proMode = isProMode(runtime);
-  const starterMode = isStarterMode(runtime);
-  const vipMode = isVipMode(budgetContext, runtime);
-  const marketSignals = await fetchMarketIntelligence(input, getMarketFetchOptions("closeflow", input, runtime));
-  const market = marketSignals.aggregate;
+  let budgetContext = {};
+  let marketSignals = null;
 
-  // Fetch reliable product price from SerpAPI (Google Shopping)
-  const query = [
-    input?.title,
-    input?.product,
-    input?.product_name,
-    input?.message
-  ].find(q => q && q.length > 5) || "smartphone";
-
-  let basePrice = null;
-
-  // 1. Try SerpAPI
   try {
-    basePrice = await getProductPrice(query);
-  } catch (_error) {
-    basePrice = null;
-  }
+    budgetContext = resolveRuntimeBudgetContext(input, runtime);
+    const proMode = isProMode(runtime);
+    const starterMode = isStarterMode(runtime);
+    const vipMode = isVipMode(budgetContext, runtime);
+    try {
+      marketSignals = await fetchMarketIntelligence(input, getMarketFetchOptions("closeflow", input, runtime));
+    } catch (_error) {
+      marketSignals = {
+        aggregate: {
+          demandScore: 50,
+          fairPrice: null,
+        },
+        sources: {},
+        execution: {
+          closeflowPath: "ai_estimation",
+          liveApiCallsUsed: 0,
+        },
+        warnings: ["market_data_unavailable"],
+      };
+    }
 
-  const normalizedBasePrice = normalizePrice(basePrice);
+    const market = marketSignals.aggregate;
 
-  const sellerAskingPrice = parseInputPrice(input);
-  const buyerIntent = inferBuyerIntent(input);
-  const marketAnchoredPrice = numberOrNull(market.fairPrice) ?? sellerAskingPrice;
-  
-  // Use basePrice from SerpAPI as the primary anchor (more reliable than market data)
-  const priceAnchor = normalizedBasePrice ?? marketAnchoredPrice;
-  
-  const estimatedRange = buildEstimatedRange(priceAnchor, market.demandScore);
-  const tierAdjustedRange = vipMode
-    ? buildVipCloseFlowRange(market, sellerAskingPrice)
-    : applyCloseFlowTierPricing(estimatedRange, budgetContext);
+    // Fetch reliable product price from SerpAPI (Google Shopping)
+    const query = [
+      input?.title,
+      input?.product,
+      input?.product_name,
+      input?.message
+    ].find(q => q && q.length > 5) || "smartphone";
 
-  if (proMode) {
-    // Use basePrice from SerpAPI as the primary anchor
-    const anchor = normalizedBasePrice ?? clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, null);
+    let basePrice = null;
 
-    if (anchor === null) {
+    // 1. Try SerpAPI (optional + non-blocking)
+    try {
+      basePrice = await getProductPrice(query);
+    } catch (_error) {
+      basePrice = null;
+    }
+
+    const normalizedBasePrice = normalizePrice(basePrice);
+
+    const sellerAskingPrice = parseInputPrice(input);
+    const buyerIntent = inferBuyerIntent(input);
+    const marketAnchoredPrice = numberOrNull(market.fairPrice) ?? sellerAskingPrice;
+
+    // Use basePrice from SerpAPI as the primary anchor (more reliable than market data)
+    const priceAnchor = normalizedBasePrice ?? marketAnchoredPrice;
+
+    const estimatedRange = buildEstimatedRange(priceAnchor, market.demandScore);
+    const tierAdjustedRange = vipMode
+      ? buildVipCloseFlowRange(market, sellerAskingPrice)
+      : applyCloseFlowTierPricing(estimatedRange, budgetContext);
+
+    if (proMode) {
+      // Use basePrice from SerpAPI as the primary anchor
+      const anchor = normalizedBasePrice ?? clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, null);
+
+      if (anchor === null) {
+        return {
+          success: true,
+          price: null,
+          message: "Price temporarily unavailable (market data missing)",
+          ...buildBudgetOutputFields(budgetContext),
+          vip_mode: false,
+          confidence: 0.62,
+          data_source_strength: resolveDataSourceStrength(marketSignals),
+          price_precision: "wide",
+          recommended_price: null,
+          price_range: {
+            low: null,
+            fair: null,
+            high: null,
+          },
+          market_confidence: "low",
+          data_source: marketCallsConsumed(marketSignals) > 0 ? "single_market_fallback" : "ai_estimation",
+          market_api_calls_consumed: marketCallsConsumed(marketSignals),
+        };
+      }
+
+      const wideRange = {
+        low: anchor * 0.85,
+        fair: anchor,
+        high: anchor * 1.18,
+      };
+
+      const recommendedPrice = normalizePrice(formatRecommendationPrice(wideRange.fair));
+
       return {
+        success: true,
+        price: recommendedPrice,
+        message: recommendedPrice !== null
+          ? "CloseFlow generated successfully"
+          : "Price temporarily unavailable (market data missing)",
         ...buildBudgetOutputFields(budgetContext),
         vip_mode: false,
         confidence: 0.62,
         data_source_strength: resolveDataSourceStrength(marketSignals),
         price_precision: "wide",
-        recommended_price: null,
+        recommended_price: recommendedPrice,
         price_range: {
-          low: null,
-          fair: null,
-          high: null,
+          low: normalizePrice(formatRecommendationPrice(wideRange.low)),
+          fair: recommendedPrice,
+          high: normalizePrice(formatRecommendationPrice(wideRange.high)),
         },
         market_confidence: "low",
         data_source: marketCallsConsumed(marketSignals) > 0 ? "single_market_fallback" : "ai_estimation",
@@ -682,65 +736,41 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
       };
     }
 
-    const wideRange = {
-      low: anchor * 0.85,
-      fair: anchor,
-      high: anchor * 1.18,
-    };
+    const tierStrategyPrefix = budgetContext.budget_tier === "vip"
+      ? "Use premium pricing confidence and keep negotiation range tight."
+      : budgetContext.budget_tier === "enterprise_pro"
+        ? "Apply aggressive optimization with strong value anchoring."
+        : "Use moderate pricing with balanced confidence.";
 
-    return {
-      ...buildBudgetOutputFields(budgetContext),
-      vip_mode: false,
-      confidence: 0.62,
-      data_source_strength: resolveDataSourceStrength(marketSignals),
-      price_precision: "wide",
-      recommended_price: formatRecommendationPrice(wideRange.fair),
-      price_range: {
-        low: formatRecommendationPrice(wideRange.low),
-        fair: formatRecommendationPrice(wideRange.fair),
-        high: formatRecommendationPrice(wideRange.high),
-      },
-      market_confidence: "low",
-      data_source: marketCallsConsumed(marketSignals) > 0 ? "single_market_fallback" : "ai_estimation",
-      market_api_calls_consumed: marketCallsConsumed(marketSignals),
-    };
-  }
+    const strategy = buyerIntent === "hot"
+      ? `${tierStrategyPrefix} Close confidently with firm value framing and immediate next-step confirmation.`
+      : buyerIntent === "cold"
+        ? `${tierStrategyPrefix} Use trust-first framing and flexible terms to reduce buyer hesitation.`
+        : `${tierStrategyPrefix} Use balanced value anchoring with a clear close timeline.`;
 
-  const tierStrategyPrefix = budgetContext.budget_tier === "vip"
-    ? "Use premium pricing confidence and keep negotiation range tight."
-    : budgetContext.budget_tier === "enterprise_pro"
-      ? "Apply aggressive optimization with strong value anchoring."
-      : "Use moderate pricing with balanced confidence.";
+    const behaviorInsight = buyerIntent === "hot"
+      ? "Buyer intent is hot and responds well to direct close language."
+      : buyerIntent === "cold"
+        ? "Buyer intent is cold and needs reassurance before price commitment."
+        : "Buyer intent is warm and likely to convert with clear value anchoring.";
 
-  const strategy = buyerIntent === "hot"
-    ? `${tierStrategyPrefix} Close confidently with firm value framing and immediate next-step confirmation.`
-    : buyerIntent === "cold"
-      ? `${tierStrategyPrefix} Use trust-first framing and flexible terms to reduce buyer hesitation.`
-      : `${tierStrategyPrefix} Use balanced value anchoring with a clear close timeline.`;
+    const deterministicPath = `${marketSignals?.execution?.closeflowPath || "ai_estimation"}`;
+    const sourceAvailability = [
+      marketSignals?.sources?.googleTrends?.available,
+      marketSignals?.sources?.ebay?.available,
+      marketSignals?.sources?.amazon?.available,
+    ];
+    const allMarketSourcesFailed = sourceAvailability.every((isAvailable) => !isAvailable);
+    const shouldUseAiOnlyPricing = vipMode ? allMarketSourcesFailed : deterministicPath === "ai_estimation";
+    const selectedPipeline = proMode
+      ? "pro_basic"
+      : starterMode && shouldUseAiOnlyPricing
+        ? "starter_ai_only"
+        : shouldUseAiOnlyPricing
+          ? "ai_only"
+          : "market";
 
-  const behaviorInsight = buyerIntent === "hot"
-    ? "Buyer intent is hot and responds well to direct close language."
-    : buyerIntent === "cold"
-      ? "Buyer intent is cold and needs reassurance before price commitment."
-      : "Buyer intent is warm and likely to convert with clear value anchoring.";
-
-  const deterministicPath = `${marketSignals?.execution?.closeflowPath || "ai_estimation"}`;
-  const sourceAvailability = [
-    marketSignals?.sources?.googleTrends?.available,
-    marketSignals?.sources?.ebay?.available,
-    marketSignals?.sources?.amazon?.available,
-  ];
-  const allMarketSourcesFailed = sourceAvailability.every((isAvailable) => !isAvailable);
-  const shouldUseAiOnlyPricing = vipMode ? allMarketSourcesFailed : deterministicPath === "ai_estimation";
-  const selectedPipeline = proMode
-    ? "pro_basic"
-    : starterMode && shouldUseAiOnlyPricing
-      ? "starter_ai_only"
-      : shouldUseAiOnlyPricing
-        ? "ai_only"
-        : "market";
-
-  if (selectedPipeline === "starter_ai_only") {
+    if (selectedPipeline === "starter_ai_only") {
     // Use basePrice from SerpAPI when available
     const aiInputPrice = normalizedBasePrice ?? sellerAskingPrice;
     
@@ -778,21 +808,28 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
       high: Number.isFinite(Number(boostedFair)) ? Number(boostedFair) * 1.15 : null,
     };
 
-    return {
-      trendBoostApplied,
-      recommended_price: formatRecommendationPrice(broadRange.fair),
-      price_range: {
-        low: formatRecommendationPrice(broadRange.low),
-        fair: formatRecommendationPrice(broadRange.fair),
-        high: formatRecommendationPrice(broadRange.high),
-      },
-      market_confidence: "low",
-      data_source: "ai_estimation",
-      market_api_calls_consumed: marketCallsConsumed(marketSignals),
-    };
-  }
+      const recommendedPrice = normalizePrice(formatRecommendationPrice(broadRange.fair));
 
-  if (selectedPipeline === "ai_only") {
+      return {
+        success: true,
+        price: recommendedPrice,
+        message: recommendedPrice !== null
+          ? "CloseFlow generated successfully"
+          : "Price temporarily unavailable (market data missing)",
+        trendBoostApplied,
+        recommended_price: recommendedPrice,
+        price_range: {
+          low: normalizePrice(formatRecommendationPrice(broadRange.low)),
+          fair: recommendedPrice,
+          high: normalizePrice(formatRecommendationPrice(broadRange.high)),
+        },
+        market_confidence: "low",
+        data_source: "ai_estimation",
+        market_api_calls_consumed: marketCallsConsumed(marketSignals),
+      };
+    }
+
+    if (selectedPipeline === "ai_only") {
     // Use basePrice from SerpAPI when available
     const aiInputPrice = normalizedBasePrice ?? sellerAskingPrice;
     
@@ -836,59 +873,78 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
     }
     const confidence = vipMode ? 0.86 : 0.72;
 
+      const recommendedPrice = normalizePrice(formatRecommendationPrice(tierAdjustedAiRange.fair));
+
+      return {
+        success: true,
+        price: recommendedPrice,
+        message: recommendedPrice !== null
+          ? "CloseFlow generated successfully"
+          : "Price temporarily unavailable (market data missing)",
+        ...buildBudgetOutputFields(budgetContext),
+        ...buildVipMetaFields({
+          budgetContext,
+          marketSignals,
+          confidence,
+          pricePrecision: vipMode ? "tight" : "standard",
+          runtime,
+        }),
+        trendBoostApplied,
+        recommended_price: recommendedPrice,
+        price_range: {
+          low: normalizePrice(formatRecommendationPrice(tierAdjustedAiRange.low)),
+          fair: recommendedPrice,
+          high: normalizePrice(formatRecommendationPrice(tierAdjustedAiRange.high)),
+        },
+        market_confidence: vipMode ? "high" : "low",
+        data_source: "ai_estimation",
+        market_api_calls_consumed: marketCallsConsumed(marketSignals),
+      };
+    }
+
+    const fairPriceValue = normalizePrice(formatRecommendationPrice(tierAdjustedRange.fair));
+    const lowPriceValue = normalizePrice(formatRecommendationPrice(tierAdjustedRange.low));
+    const highPriceValue = normalizePrice(formatRecommendationPrice(tierAdjustedRange.high));
+
+    const baseConfidence = deterministicPath === "cache" ? "medium" : "high";
+    const confidence = vipMode ? "high" : baseConfidence;
+    const numericConfidence = vipMode
+      ? (resolveDataSourceStrength(marketSignals) === "high" ? 0.94 : 0.88)
+      : (baseConfidence === "high" ? 0.84 : 0.74);
+
     return {
+      success: true,
+      price: fairPriceValue,
+      message: fairPriceValue !== null
+        ? "CloseFlow generated successfully"
+        : "Price temporarily unavailable (market data missing)",
       ...buildBudgetOutputFields(budgetContext),
       ...buildVipMetaFields({
         budgetContext,
         marketSignals,
-        confidence,
+        confidence: numericConfidence,
         pricePrecision: vipMode ? "tight" : "standard",
-        runtime,
       }),
-      trendBoostApplied,
-      recommended_price: formatRecommendationPrice(tierAdjustedAiRange.fair),
+      recommended_price: fairPriceValue,
       price_range: {
-        low: formatRecommendationPrice(tierAdjustedAiRange.low),
-        fair: formatRecommendationPrice(tierAdjustedAiRange.fair),
-        high: formatRecommendationPrice(tierAdjustedAiRange.high),
+        low: lowPriceValue,
+        fair: fairPriceValue,
+        high: highPriceValue,
       },
-      market_confidence: vipMode ? "high" : "low",
-      data_source: "ai_estimation",
+      market_confidence: confidence,
+      data_source: deterministicPath === "live_api" ? "live_api" : "cache",
       market_api_calls_consumed: marketCallsConsumed(marketSignals),
     };
+  } catch (err) {
+    console.error("CloseFlow engine error:", err);
+    return {
+      success: false,
+      price: null,
+      message: "CloseFlow engine error",
+      ...buildBudgetOutputFields(budgetContext),
+      market_api_calls_consumed: marketSignals ? marketCallsConsumed(marketSignals) : 0,
+    };
   }
-
-  const fairPriceValue = formatRecommendationPrice(tierAdjustedRange.fair);
-  const lowPriceValue = formatRecommendationPrice(tierAdjustedRange.low);
-  const highPriceValue = formatRecommendationPrice(tierAdjustedRange.high);
-
-  const baseConfidence = deterministicPath === "cache" ? "medium" : "high";
-  const confidence = vipMode ? "high" : baseConfidence;
-  const numericConfidence = vipMode
-    ? (resolveDataSourceStrength(marketSignals) === "high" ? 0.94 : 0.88)
-    : (baseConfidence === "high" ? 0.84 : 0.74);
-
-  return {
-    ...buildBudgetOutputFields(budgetContext),
-    ...buildVipMetaFields({
-      budgetContext,
-      marketSignals,
-      confidence: numericConfidence,
-      pricePrecision: vipMode ? "tight" : "standard",
-    }),
-    recommended_price: fairPriceValue,
-    price_range: {
-      low: lowPriceValue,
-      fair: fairPriceValue,
-      high: highPriceValue,
-    },
-    market_confidence: confidence,
-    data_source: deterministicPath === "live_api" ? "live_api" : "cache",
-    market_api_calls_consumed: marketCallsConsumed(marketSignals),
-    message: fairPriceValue === null
-      ? "Price temporarily unavailable (market data missing)"
-      : "CloseFlow generated successfully",
-  };
 }
 
 async function buildAdImprovementReportDecision(input, aiTools = {}, runtime = {}) {
