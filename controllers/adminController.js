@@ -20,6 +20,8 @@ const toNumber = (value) => {
   return Number.isFinite(normalized) ? normalized : 0;
 };
 
+const { normalizePrice } = require("../backend/utils/normalizePrice");
+
 const pickDate = (...values) => {
   for (const value of values) {
     const parsed = toValidDate(value);
@@ -86,7 +88,7 @@ const sanitizeRecentAd = (ad) => ({
   id: ad?.id || null,
   title: ad?.title || "Untitled ad",
   status: ad?.status || "draft",
-  price: toNumber(ad?.price),
+  price: normalizePrice(ad?.price),
   created_at: toIsoString(getCreatedDate(ad)),
 });
 

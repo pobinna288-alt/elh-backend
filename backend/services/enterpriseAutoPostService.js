@@ -26,6 +26,8 @@ try {
   console.warn("[Enterprise Auto-Post] OpenAI initialization skipped:", err.message);
 }
 
+ const { normalizePrice } = require("../utils/normalizePrice");
+
 // ─── Access Control ─────────────────────────────────────────────────────────
 
 const SUBSCRIPTION_ACCESS = {
@@ -353,13 +355,22 @@ function generateFallbackDescriptions(payload) {
  */
 function generateFallbackPricing(payload) {
   const { price, category } = payload;
-  const basePrice = parseFloat(price) || 100;
+  const basePrice = normalizePrice(price);
   const multiplier = GLOBAL_MARKET_DATA.categoryMultipliers[category] || 1.0;
-  
+
+  if (basePrice === null) {
+    return {
+      priceRange: null,
+      recommendedPrice: null,
+      reason: "Pricing engine unavailable",
+      speedImpact: null,
+    };
+  }
+
   const minPrice = Math.round(basePrice * 0.85 * multiplier);
   const maxPrice = Math.round(basePrice * 1.15 * multiplier);
   const recommended = Math.round(basePrice * 0.95 * multiplier);
-  
+
   return {
     priceRange: `$${minPrice} - $${maxPrice}`,
     recommendedPrice: `$${recommended}`,
@@ -474,9 +485,20 @@ function generateFallbackAdReport(payload) {
  */
 function generateFallbackRevenuePrediction(payload, adReport) {
   const { price } = payload;
-  const basePrice = parseFloat(price) || 100;
+  const basePrice = normalizePrice(price);
   const conversionProb = parseInt(adReport.predictedConversionProbability) || 50;
   
+  if (basePrice === null) {
+    return {
+      salesProbability: `${conversionProb}%`,
+      estimatedBuyersRange: null,
+      projectedRevenueRange: null,
+      riskLevel: "Medium",
+      aiApproval: "Warning",
+      confidenceNote: "Pricing engine unavailable",
+    };
+  }
+
   // Estimate buyers based on conversion probability
   const minBuyers = Math.max(1, Math.round(conversionProb / 10));
   const maxBuyers = Math.round(conversionProb / 5);

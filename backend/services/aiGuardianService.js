@@ -65,6 +65,8 @@ try {
   console.warn("[AI Guardian] OpenAI initialization skipped:", err.message);
 }
 
+ const { normalizePrice } = require("../utils/normalizePrice");
+
 // ─── Required Campaign Inputs Schema ────────────────────────────────────────
 
 /**
@@ -463,7 +465,11 @@ function analyzePricing(campaignData, tier) {
   const category = detectProductCategory(campaignData);
   const categoryData = PRODUCT_CATEGORIES[category] || PRODUCT_CATEGORIES.other;
   const [minPrice, maxPrice] = categoryData.priceRange;
-  const productPrice = parseFloat(campaignData.product_price) || 0;
+  const productPrice = normalizePrice(campaignData.product_price);
+
+  if (productPrice === null) {
+    return null;
+  }
   
   // Calculate optimal price band
   const optimalMin = Math.round(minPrice * 1.1);
@@ -782,18 +788,23 @@ Generate a JSON response with:
   
   // Fallback to rule-based generation
   const productName = campaignData.product_name || "Product";
-  const price = parseFloat(campaignData.product_price) || 0;
   const category = detectProductCategory(campaignData);
   const categoryData = PRODUCT_CATEGORIES[category] || PRODUCT_CATEGORIES.other;
   
-  // Calculate suggested price
-  const [minPrice, maxPrice] = categoryData.priceRange;
-  const optimalPrice = Math.round(minPrice + (maxPrice - minPrice) * 0.4);
+  const parsedPrice = parseFloat(campaignData.product_price);
+  const price = normalizePrice(parsedPrice);
+
+  const optimalPrice = price === null
+    ? null
+    : (() => {
+        const [minPrice, maxPrice] = categoryData.priceRange;
+        return Math.round(minPrice + (maxPrice - minPrice) * 0.4);
+      })();
   
   return {
     optimized_title: `${productName} - Premium Quality, Best Value`,
     optimized_description: campaignData.product_description?.substring(0, 150) || `Discover ${productName} - the perfect choice for you.`,
-    suggested_price: `$${optimalPrice}`,
+    suggested_price: optimalPrice === null ? null : `$${optimalPrice}`,
     ad_hook: `Looking for the perfect ${category} solution?`,
     call_to_action: "Shop Now and Save"
   };
@@ -927,7 +938,7 @@ function generateGuardianAnalysisSync(campaignData) {
     response.auto_post_generator = {
       optimized_title: `${productName} - Premium Quality, Best Value`,
       optimized_description: campaignData.product_description?.substring(0, 150) || `Discover ${productName} - the perfect choice for you.`,
-      suggested_price: `$${optimalPrice}`,
+      suggested_price: null,
       ad_hook: `Looking for the perfect ${category} solution?`,
       call_to_action: "Shop Now and Save"
     };

@@ -10,6 +10,8 @@ const {
 const {
   runMarketIntelligenceHealthCheck,
 } = require("../../services/marketIntelligenceService");
+const { convertFromUsd, convertToUsd, normalizeCurrencyCode } = require("../../services/currencyConversionService");
+const { normalizePrice } = require("../../utils/normalizePrice");
 const { formatCloseFlowCurrencyResponse } = require("../../utils/currencyResponseFormatter");
 const { resolveBudgetContext } = require("../../config/enterpriseBudgetConfig");
 const { createAiUsageGuard } = require("../../middleware/aiUsageGuardMiddleware");
@@ -591,34 +593,27 @@ async function handleCloseFlowMvp(req, res) {
       marketAccessMode: req.marketAccessMode,
     });
 
-    const responsePayload = req.subscriptionLevel === "starter"
-      ? sanitizeStarterDecision("negotiation", decision)
-      : decision;
+    const enginePrice = normalizePrice(decision?.price);
 
-    const userContext = {
-      ...(req.currentUser || {}),
-      ...(req.user || {}),
-      plan: req.subscriptionLevel,
-    };
-    const currencyNormalizedPayload = await formatCloseFlowCurrencyResponse(userContext, responsePayload);
-
-    const priceCandidate =
-      currencyNormalizedPayload?.recommended_price ??
-      currencyNormalizedPayload?.price ??
-      currencyNormalizedPayload?.broad_price_range?.fair ??
-      currencyNormalizedPayload?.broad_price_range?.low;
-    const price = Number.isFinite(Number(priceCandidate)) ? Number(priceCandidate) : 0;
+    if (enginePrice === null) {
+      return res.json({
+        success: false,
+        price: null,
+        message: "Pricing engine unavailable",
+      });
+    }
 
     return res.json({
       success: true,
-      price,
+      price: enginePrice,
       message: "CloseFlow generated successfully",
     });
   } catch (err) {
     console.error("CloseFlow error:", err);
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      price: null,
+      message: "Pricing engine unavailable",
     });
   }
 }

@@ -14,6 +14,8 @@
  * @version 2.0.0
  */
 
+ const { normalizePrice } = require("../utils/normalizePrice");
+
 // ============================================
 // CONSTANTS AND CONFIGURATION
 // ============================================
@@ -492,7 +494,12 @@ function applyPriceFilter(ads, params) {
   }
   
   return ads.filter(ad => {
-    const price = parseFloat(ad.price) || 0;
+    const price = normalizePrice(ad.price);
+
+    if (price === null) {
+      return false;
+    }
+
     return price >= minPrice && price <= maxPrice;
   });
 }
@@ -677,8 +684,25 @@ function applySorting(ads, sortOption, hasSearchQuery = false) {
     
     // Handle numeric fields
     if (['price', 'views', 'clicks', 'trust_score'].includes(sort.field)) {
-      valA = parseFloat(valA) || 0;
-      valB = parseFloat(valB) || 0;
+      if (sort.field === 'price') {
+        valA = normalizePrice(valA);
+        valB = normalizePrice(valB);
+
+        if (valA === null && valB === null) {
+          return 0;
+        }
+
+        if (valA === null) {
+          return 1;
+        }
+
+        if (valB === null) {
+          return -1;
+        }
+      } else {
+        valA = parseFloat(valA) || 0;
+        valB = parseFloat(valB) || 0;
+      }
     }
     
     if (sort.direction === 'DESC') {
@@ -835,11 +859,13 @@ function formatAdForResponse(ad) {
     .filter(Boolean)
     .join(', ') || ad.location || null;
 
+  const normalizedPrice = normalizePrice(ad.price);
+
   return {
     ad_id: ad.id,
     title: ad.title,
     description: ad.description ? ad.description.substring(0, 200) : null,
-    price: parseFloat(ad.price) || 0,
+    price: normalizedPrice,
     currency: ad.currency || 'USD',
     category: ad.category,
     condition: ad.condition,

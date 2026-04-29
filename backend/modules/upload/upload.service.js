@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const coinRewardService = require("../../services/coinRewardService");
 const videoDurationExtractor = require("../../utils/videoDurationExtractor");
+const { normalizeCurrencyCode } = require("../../services/currencyConversionService");
+const { convertToUsd } = require("../../services/currencyConversionService");
+const { normalizePrice } = require("../../utils/normalizePrice");
 
 // URL prefix for ad media files stored by the mediaUpload multer in server.js
 const AD_MEDIA_URL_PREFIX = "/uploads/ads/";
@@ -136,8 +139,8 @@ function createUploadService({
       const adImages = [...(Array.isArray(images) ? images : []), ...uploadedImageUrls];
       const adVideo = (typeof video === "string" && video.length > 0 ? video : null) || uploadedVideoUrl;
       const normalizedCurrency = normalizeCurrencyCode(validatedAd.currency || currency);
-      const numericPrice = Number.isFinite(price) ? price : 0;
-      const priceUsd = await convertToUsd(numericPrice, normalizedCurrency);
+      const numericPrice = normalizePrice(price);
+      const priceUsd = numericPrice === null ? null : await convertToUsd(numericPrice, normalizedCurrency);
 
       let targetCountries = locationDetails.country ? [locationDetails.country] : [];
       let targetingReasoning = [];
