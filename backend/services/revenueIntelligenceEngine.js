@@ -1,8 +1,29 @@
 const crypto = require("crypto");
 const { fetchMarketIntelligence } = require("./marketIntelligenceService");
 const { resolveBudgetContext } = require("../config/enterpriseBudgetConfig");
+const { getMarketTrends, getProductPrice } = require("./serpApiService");
 
 const MARKET_INTERNAL_AUTH_SECRET = process.env.MARKET_INTERNAL_AUTH_SECRET || "";
+
+// Fallback prices by category (only used when SerpAPI fails)
+const fallbackPrices = {
+  iphone: 600,
+  samsung: 400,
+  laptop: 700,
+  headphones: 50,
+};
+
+function getFallbackPrice(query) {
+  const q = (query || "").toLowerCase();
+
+  for (const key in fallbackPrices) {
+    if (q.includes(key)) {
+      return fallbackPrices[key];
+    }
+  }
+
+  return null;
+}
 
 function cleanText(value, fallback = "") {
   const normalized = `${value ?? fallback}`.replace(/\s+/g, " ").trim();
@@ -89,6 +110,65 @@ function clampPositive(value, fallback) {
     return fallback;
   }
   return numeric;
+}
+
+function resolveCloseFlowProductName(input = {}) {
+  const candidate =
+    input.product_name ??
+    input.productName ??
+    input.product ??
+    input.title;
+
+  const normalized = cleanText(candidate, "");
+  return normalized && normalized.length >= 3 ? normalized : null;
+}
+
+function extractTrendInterestScore(trendPayload) {
+  const timeline = Array.isArray(trendPayload?.interest_over_time?.timeline_data)
+    ? trendPayload.interest_over_time.timeline_data
+    : Array.isArray(trendPayload?.interest_over_time)
+      ? trendPayload.interest_over_time
+      : null;
+
+  if (!timeline || timeline.length === 0) {
+    return null;
+  }
+
+  const values = timeline
+    .map((entry) => {
+      const raw =
+        entry?.values?.[0]?.value ??
+        entry?.values?.[0] ??
+        entry?.value ??
+        entry?.values;
+      const numeric = Number(raw);
+      return Number.isFinite(numeric) ? numeric : null;
+    })
+    .filter((value) => Number.isFinite(value));
+
+  if (!values.length) {
+    return null;
+  }
+
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const normalized = clamp(Math.round(avg), 0, 100);
+  return normalized;
+}
+
+function computeTrendBoostMultiplier(interestScore) {
+  if (!Number.isFinite(interestScore)) {
+    return 0;
+  }
+
+  if (interestScore < 35) {
+    return 0.03 * (interestScore / 35);
+  }
+
+  if (interestScore < 65) {
+    return 0.03 + (0.04 * ((interestScore - 35) / 30));
+  }
+
+  return 0.07 + (0.08 * ((Math.min(interestScore, 100) - 65) / 35));
 }
 
 function pickTrendDirection(direction) {
@@ -234,7 +314,15 @@ function buildVipMetaFields({
 function buildVipCloseFlowRange(market = {}, sellerAskingPrice = null) {
   const ebayAnchor = clampPositive(numberOrNull(market?.ebayAveragePrice), null);
   const amazonValidation = clampPositive(numberOrNull(market?.amazonAveragePrice), null);
-  const fallbackAnchor = clampPositive(numberOrNull(sellerAskingPrice), 100);
+  const fallbackAnchor = clampPositive(numberOrNull(sellerAskingPrice), null);
+
+  if (!Number.isFinite(ebayAnchor) && !Number.isFinite(amazonValidation) && fallbackAnchor === null) {
+    return {
+      low: null,
+      fair: null,
+      high: null,
+    };
+  }
 
   let baseAnchor = ebayAnchor || amazonValidation || fallbackAnchor;
 
@@ -258,7 +346,15 @@ function buildVipCloseFlowRange(market = {}, sellerAskingPrice = null) {
 
 function applyCloseFlowTierPricing(range, budgetContext) {
   const tier = `${budgetContext?.budget_tier || "enterprise"}`;
-  const baseFair = clampPositive(numberOrNull(range?.fair), 100);
+  const baseFair = clampPositive(numberOrNull(range?.fair), null);
+
+  if (baseFair === null) {
+    return {
+      low: null,
+      fair: null,
+      high: null,
+    };
+  }
 
   let fairMultiplier = 1;
   let rangeWidth = 0.08;
@@ -333,7 +429,15 @@ function inferBuyerIntent(input = {}) {
 }
 
 function buildEstimatedRange(askingPrice, demandScore) {
-  const anchor = clampPositive(askingPrice, 100);
+  const anchor = clampPositive(askingPrice, null);
+
+  if (anchor === null) {
+    return {
+      low: null,
+      fair: null,
+      high: null,
+    };
+  }
   const demandFactor = demandAdjustmentFactor(demandScore);
   const fair = anchor * demandFactor;
 
@@ -547,16 +651,71 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
   const marketSignals = await fetchMarketIntelligence(input, getMarketFetchOptions("closeflow", input, runtime));
   const market = marketSignals.aggregate;
 
+  // Fetch reliable product price from SerpAPI (Google Shopping)
+  const query = [
+    input?.title,
+    input?.product,
+    input?.product_name,
+    input?.message
+  ].find(q => q && q.length > 5) || "smartphone";
+
+  let basePrice = null;
+
+  // 1. Try SerpAPI
+  const serp = await getProductPrice(query);
+  if (serp.success && serp.price > 0) {
+    basePrice = serp.price;
+  }
+
+  // 2. Fallback if SerpAPI fails
+  if (!basePrice) {
+    basePrice = getFallbackPrice(query);
+  }
+
+  // 3. Final guard
+  if (!basePrice) {
+    return {
+      success: false,
+      price: null,
+      message: "Pricing engine unavailable"
+    };
+  }
+
   const sellerAskingPrice = parseInputPrice(input);
   const buyerIntent = inferBuyerIntent(input);
   const marketAnchoredPrice = numberOrNull(market.fairPrice) ?? sellerAskingPrice;
-  const estimatedRange = buildEstimatedRange(marketAnchoredPrice, market.demandScore);
+  
+  // Use basePrice from SerpAPI as the primary anchor (more reliable than market data)
+  const priceAnchor = Number.isFinite(basePrice) ? basePrice : marketAnchoredPrice;
+  
+  const estimatedRange = buildEstimatedRange(priceAnchor, market.demandScore);
   const tierAdjustedRange = vipMode
     ? buildVipCloseFlowRange(market, sellerAskingPrice)
     : applyCloseFlowTierPricing(estimatedRange, budgetContext);
 
   if (proMode) {
-    const anchor = clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, 100);
+    // Use basePrice from SerpAPI as the primary anchor
+    const anchor = Number.isFinite(basePrice) ? basePrice : clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, null);
+
+    if (anchor === null) {
+      return {
+        ...buildBudgetOutputFields(budgetContext),
+        vip_mode: false,
+        confidence: 0.62,
+        data_source_strength: resolveDataSourceStrength(marketSignals),
+        price_precision: "wide",
+        recommended_price: null,
+        price_range: {
+          low: null,
+          fair: null,
+          high: null,
+        },
+        market_confidence: "low",
+        data_source: marketCallsConsumed(marketSignals) > 0 ? "single_market_fallback" : "ai_estimation",
+        market_api_calls_consumed: marketCallsConsumed(marketSignals),
+      };
+    }
+
     const wideRange = {
       low: anchor * 0.85,
       fair: anchor,
@@ -616,27 +775,50 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
         : "market";
 
   if (selectedPipeline === "starter_ai_only") {
+    // Use basePrice from SerpAPI when available
+    const aiInputPrice = Number.isFinite(basePrice) ? basePrice : sellerAskingPrice;
+    
     const aiEstimated = await buildAiEstimatedCloseflowRange({
       aiTools,
       buyerIntent,
       strategy,
       behaviorInsight,
-      sellerAskingPrice,
+      sellerAskingPrice: aiInputPrice,
       demandScore: market.demandScore,
     });
 
+    let trendBoostApplied = false;
+    let boostedFair = aiEstimated.estimatedRange.fair;
+
+    if (
+      process.env.SERPAPI_KEY &&
+      Number.isFinite(Number(boostedFair))
+    ) {
+      const productName = resolveCloseFlowProductName(input);
+      if (productName) {
+        const trendResult = await getMarketTrends(productName);
+        const interestScore = trendResult?.success ? extractTrendInterestScore(trendResult.data) : null;
+        const boost = computeTrendBoostMultiplier(interestScore);
+        if (boost > 0) {
+          boostedFair = Number(boostedFair) * (1 + Math.min(boost, 0.15));
+          trendBoostApplied = true;
+        }
+      }
+    }
+
     const broadRange = {
-      low: aiEstimated.estimatedRange.fair * 0.9,
-      fair: aiEstimated.estimatedRange.fair,
-      high: aiEstimated.estimatedRange.fair * 1.15,
+      low: Number.isFinite(Number(boostedFair)) ? Number(boostedFair) * 0.9 : null,
+      fair: Number.isFinite(Number(boostedFair)) ? Number(boostedFair) : null,
+      high: Number.isFinite(Number(boostedFair)) ? Number(boostedFair) * 1.15 : null,
     };
 
     return {
-      recommended_price: Number(formatRecommendationPrice(broadRange.fair)),
+      trendBoostApplied,
+      recommended_price: numberOrNull(broadRange.fair) === null ? null : Number(formatRecommendationPrice(broadRange.fair)),
       price_range: {
-        low: Number(formatRecommendationPrice(broadRange.low)),
-        fair: Number(formatRecommendationPrice(broadRange.fair)),
-        high: Number(formatRecommendationPrice(broadRange.high)),
+        low: numberOrNull(broadRange.low) === null ? null : Number(formatRecommendationPrice(broadRange.low)),
+        fair: numberOrNull(broadRange.fair) === null ? null : Number(formatRecommendationPrice(broadRange.fair)),
+        high: numberOrNull(broadRange.high) === null ? null : Number(formatRecommendationPrice(broadRange.high)),
       },
       market_confidence: "low",
       data_source: "ai_estimation",
@@ -645,22 +827,47 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
   }
 
   if (selectedPipeline === "ai_only") {
+    // Use basePrice from SerpAPI when available
+    const aiInputPrice = Number.isFinite(basePrice) ? basePrice : sellerAskingPrice;
+    
     const aiEstimated = await buildAiEstimatedCloseflowRange({
       aiTools,
       buyerIntent,
       strategy,
       behaviorInsight,
-      sellerAskingPrice,
+      sellerAskingPrice: aiInputPrice,
       demandScore: market.demandScore,
     });
 
-    const tierAdjustedAiRange = vipMode
+    let tierAdjustedAiRange = vipMode
       ? {
           low: aiEstimated.estimatedRange.fair * 0.975,
           fair: aiEstimated.estimatedRange.fair,
           high: aiEstimated.estimatedRange.fair * 1.025,
         }
       : applyCloseFlowTierPricing(aiEstimated.estimatedRange, budgetContext);
+
+    let trendBoostApplied = false;
+    if (
+      process.env.SERPAPI_KEY &&
+      Number.isFinite(Number(tierAdjustedAiRange?.fair))
+    ) {
+      const productName = resolveCloseFlowProductName(input);
+      if (productName) {
+        const trendResult = await getMarketTrends(productName);
+        const interestScore = trendResult?.success ? extractTrendInterestScore(trendResult.data) : null;
+        const boost = computeTrendBoostMultiplier(interestScore);
+        if (boost > 0) {
+          const multiplier = 1 + Math.min(boost, 0.15);
+          tierAdjustedAiRange = {
+            low: Number.isFinite(Number(tierAdjustedAiRange.low)) ? Number(tierAdjustedAiRange.low) * multiplier : tierAdjustedAiRange.low,
+            fair: Number(tierAdjustedAiRange.fair) * multiplier,
+            high: Number.isFinite(Number(tierAdjustedAiRange.high)) ? Number(tierAdjustedAiRange.high) * multiplier : tierAdjustedAiRange.high,
+          };
+          trendBoostApplied = true;
+        }
+      }
+    }
     const confidence = vipMode ? 0.86 : 0.72;
 
     return {
@@ -672,11 +879,12 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
         pricePrecision: vipMode ? "tight" : "standard",
         runtime,
       }),
-      recommended_price: Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
+      trendBoostApplied,
+      recommended_price: numberOrNull(tierAdjustedAiRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
       price_range: {
-        low: Number(formatRecommendationPrice(tierAdjustedAiRange.low)),
-        fair: Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
-        high: Number(formatRecommendationPrice(tierAdjustedAiRange.high)),
+        low: numberOrNull(tierAdjustedAiRange.low) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.low)),
+        fair: numberOrNull(tierAdjustedAiRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
+        high: numberOrNull(tierAdjustedAiRange.high) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.high)),
       },
       market_confidence: vipMode ? "high" : "low",
       data_source: "ai_estimation",
@@ -684,9 +892,9 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
     };
   }
 
-  const fairPriceValue = Number(formatRecommendationPrice(tierAdjustedRange.fair));
-  const lowPriceValue = Number(formatRecommendationPrice(tierAdjustedRange.low));
-  const highPriceValue = Number(formatRecommendationPrice(tierAdjustedRange.high));
+  const fairPriceValue = numberOrNull(tierAdjustedRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.fair));
+  const lowPriceValue = numberOrNull(tierAdjustedRange.low) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.low));
+  const highPriceValue = numberOrNull(tierAdjustedRange.high) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.high));
 
   const baseConfidence = deterministicPath === "cache" ? "medium" : "high";
   const confidence = vipMode ? "high" : baseConfidence;

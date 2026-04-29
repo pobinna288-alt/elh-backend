@@ -48,6 +48,49 @@ async function getMarketTrends(query) {
   }
 }
 
+async function getProductPrice(query) {
+  try {
+    const searchQuery = `${query} price buy online`;
+
+    const response = await axios.get("https://serpapi.com/search.json", {
+      params: {
+        engine: "google_shopping",
+        q: searchQuery,
+        api_key: process.env.SERPAPI_KEY,
+      },
+      timeout: 20000,
+    });
+
+    const results = response.data?.shopping_results || [];
+
+    if (!results.length) {
+      return { success: false, price: null };
+    }
+
+    const prices = results
+      .map((item) => parseFloat(item.price?.replace(/[^0-9.]/g, "")))
+      .filter((p) => !isNaN(p));
+
+    if (!prices.length) {
+      return { success: false, price: null };
+    }
+
+    // median price (stable)
+    prices.sort((a, b) => a - b);
+    const mid = Math.floor(prices.length / 2);
+
+    return {
+      success: true,
+      price: prices[mid],
+    };
+
+  } catch (error) {
+    console.error("[SerpAPI ERROR]", error.message);
+    return { success: false, price: null };
+  }
+}
+
 module.exports = {
   getMarketTrends,
+  getProductPrice,
 };
