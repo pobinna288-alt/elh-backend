@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const Redis = require("ioredis");
+const { getMarketTrends } = require("./serpApiService");
 const DEFAULT_TIMEOUT_MS = 6500;
 const MARKET_INTERNAL_AUTH_SECRET = process.env.MARKET_INTERNAL_AUTH_SECRET || "";
 const MARKET_INTERNAL_AUTH_TOLERANCE_MS = Number.parseInt(process.env.MARKET_INTERNAL_AUTH_TOLERANCE_MS || "300000", 10);
@@ -654,29 +655,25 @@ function parseAmazonPayload(data) {
 }
 
 async function fetchGoogleTrendsSignal({ product, niche, country }) {
-  const config = sourceConfig(MARKET_SOURCE.TRENDS);
-  const baseUrl = config.url;
-  const apiKey = config.key;
   const query = product || niche;
+  const apiKey = process.env.SERPAPI_KEY;
 
-  if (!config.available || !baseUrl) {
+  if (!apiKey) {
     return {
       available: false,
       source: MARKET_SOURCE.TRENDS,
       data: parseTrendsPayload(null),
-      error: config.reasons?.join("; ") || "source not configured",
+      error: "SerpAPI key missing",
     };
   }
 
-  const url = buildUrl(baseUrl, { query, geo: country });
-  const headers = apiKey ? { "x-api-key": apiKey, authorization: `Bearer ${apiKey}` } : {};
-  const response = await fetchJson(url, { headers, label: MARKET_SOURCE.TRENDS });
+  const trendsResult = await getMarketTrends(query);
 
   return {
-    available: Boolean(response.ok && response.data),
+    available: Boolean(trendsResult && trendsResult.success && trendsResult.data),
     source: MARKET_SOURCE.TRENDS,
-    data: parseTrendsPayload(response.data),
-    error: response.ok ? null : response.error,
+    data: parseTrendsPayload(trendsResult && trendsResult.success ? trendsResult.data : null),
+    error: trendsResult && trendsResult.success ? null : "SerpAPI request failed",
   };
 }
 
