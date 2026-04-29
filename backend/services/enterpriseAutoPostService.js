@@ -362,7 +362,7 @@ function generateFallbackPricing(payload) {
     return {
       priceRange: null,
       recommendedPrice: null,
-      reason: "Pricing engine unavailable",
+      reason: "Price temporarily unavailable (market data missing)",
       speedImpact: null,
     };
   }
@@ -495,7 +495,7 @@ function generateFallbackRevenuePrediction(payload, adReport) {
       projectedRevenueRange: null,
       riskLevel: "Medium",
       aiApproval: "Warning",
-      confidenceNote: "Pricing engine unavailable",
+      confidenceNote: "Price temporarily unavailable (market data missing)",
     };
   }
 

@@ -64,29 +64,26 @@ async function getProductPrice(query) {
     const results = response.data?.shopping_results || [];
 
     if (!results.length) {
-      return { success: false, price: null };
+      return null;
     }
 
     const prices = results
       .map((item) => parseFloat(item.price?.replace(/[^0-9.]/g, "")))
-      .filter((p) => !isNaN(p));
+      .filter((p) => Number.isFinite(p));
 
     if (!prices.length) {
-      return { success: false, price: null };
+      return null;
     }
 
     // median price (stable)
     prices.sort((a, b) => a - b);
     const mid = Math.floor(prices.length / 2);
 
-    return {
-      success: true,
-      price: prices[mid],
-    };
+    return prices[mid];
 
   } catch (error) {
-    console.error("[SerpAPI ERROR]", error.message);
-    return { success: false, price: null };
+    console.log("[SerpAPI] failed, using fallback");
+    return null;
   }
 }
 

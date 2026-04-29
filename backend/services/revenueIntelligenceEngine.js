@@ -2,28 +2,9 @@ const crypto = require("crypto");
 const { fetchMarketIntelligence } = require("./marketIntelligenceService");
 const { resolveBudgetContext } = require("../config/enterpriseBudgetConfig");
 const { getMarketTrends, getProductPrice } = require("./serpApiService");
+const { normalizePrice } = require("../utils/normalizePrice");
 
 const MARKET_INTERNAL_AUTH_SECRET = process.env.MARKET_INTERNAL_AUTH_SECRET || "";
-
-// Fallback prices by category (only used when SerpAPI fails)
-const fallbackPrices = {
-  iphone: 600,
-  samsung: 400,
-  laptop: 700,
-  headphones: 50,
-};
-
-function getFallbackPrice(query) {
-  const q = (query || "").toLowerCase();
-
-  for (const key in fallbackPrices) {
-    if (q.includes(key)) {
-      return fallbackPrices[key];
-    }
-  }
-
-  return null;
-}
 
 function cleanText(value, fallback = "") {
   const normalized = `${value ?? fallback}`.replace(/\s+/g, " ").trim();
@@ -77,15 +58,11 @@ function parseInputPrice(input = {}) {
 function formatRecommendationPrice(value) {
   const numeric = numberOrNull(value);
   if (numeric === null) {
-    return "0";
+    return null;
   }
 
   const rounded = Math.round(numeric * 10) / 10;
-  if (Number.isInteger(rounded)) {
-    return `${rounded}`;
-  }
-
-  return rounded.toFixed(1);
+  return Number.isInteger(rounded) ? rounded : Number(rounded.toFixed(1));
 }
 
 function demandAdjustmentFactor(demandScore) {
@@ -662,31 +639,20 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
   let basePrice = null;
 
   // 1. Try SerpAPI
-  const serp = await getProductPrice(query);
-  if (serp.success && serp.price > 0) {
-    basePrice = serp.price;
+  try {
+    basePrice = await getProductPrice(query);
+  } catch (_error) {
+    basePrice = null;
   }
 
-  // 2. Fallback if SerpAPI fails
-  if (!basePrice) {
-    basePrice = getFallbackPrice(query);
-  }
-
-  // 3. Final guard
-  if (!basePrice) {
-    return {
-      success: false,
-      price: null,
-      message: "Pricing engine unavailable"
-    };
-  }
+  const normalizedBasePrice = normalizePrice(basePrice);
 
   const sellerAskingPrice = parseInputPrice(input);
   const buyerIntent = inferBuyerIntent(input);
   const marketAnchoredPrice = numberOrNull(market.fairPrice) ?? sellerAskingPrice;
   
   // Use basePrice from SerpAPI as the primary anchor (more reliable than market data)
-  const priceAnchor = Number.isFinite(basePrice) ? basePrice : marketAnchoredPrice;
+  const priceAnchor = normalizedBasePrice ?? marketAnchoredPrice;
   
   const estimatedRange = buildEstimatedRange(priceAnchor, market.demandScore);
   const tierAdjustedRange = vipMode
@@ -695,7 +661,7 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
 
   if (proMode) {
     // Use basePrice from SerpAPI as the primary anchor
-    const anchor = Number.isFinite(basePrice) ? basePrice : clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, null);
+    const anchor = normalizedBasePrice ?? clampPositive(numberOrNull(market.fairPrice) ?? sellerAskingPrice, null);
 
     if (anchor === null) {
       return {
@@ -728,11 +694,11 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
       confidence: 0.62,
       data_source_strength: resolveDataSourceStrength(marketSignals),
       price_precision: "wide",
-      recommended_price: Number(formatRecommendationPrice(wideRange.fair)),
+      recommended_price: formatRecommendationPrice(wideRange.fair),
       price_range: {
-        low: Number(formatRecommendationPrice(wideRange.low)),
-        fair: Number(formatRecommendationPrice(wideRange.fair)),
-        high: Number(formatRecommendationPrice(wideRange.high)),
+        low: formatRecommendationPrice(wideRange.low),
+        fair: formatRecommendationPrice(wideRange.fair),
+        high: formatRecommendationPrice(wideRange.high),
       },
       market_confidence: "low",
       data_source: marketCallsConsumed(marketSignals) > 0 ? "single_market_fallback" : "ai_estimation",
@@ -776,7 +742,7 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
 
   if (selectedPipeline === "starter_ai_only") {
     // Use basePrice from SerpAPI when available
-    const aiInputPrice = Number.isFinite(basePrice) ? basePrice : sellerAskingPrice;
+    const aiInputPrice = normalizedBasePrice ?? sellerAskingPrice;
     
     const aiEstimated = await buildAiEstimatedCloseflowRange({
       aiTools,
@@ -814,11 +780,11 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
 
     return {
       trendBoostApplied,
-      recommended_price: numberOrNull(broadRange.fair) === null ? null : Number(formatRecommendationPrice(broadRange.fair)),
+      recommended_price: formatRecommendationPrice(broadRange.fair),
       price_range: {
-        low: numberOrNull(broadRange.low) === null ? null : Number(formatRecommendationPrice(broadRange.low)),
-        fair: numberOrNull(broadRange.fair) === null ? null : Number(formatRecommendationPrice(broadRange.fair)),
-        high: numberOrNull(broadRange.high) === null ? null : Number(formatRecommendationPrice(broadRange.high)),
+        low: formatRecommendationPrice(broadRange.low),
+        fair: formatRecommendationPrice(broadRange.fair),
+        high: formatRecommendationPrice(broadRange.high),
       },
       market_confidence: "low",
       data_source: "ai_estimation",
@@ -828,7 +794,7 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
 
   if (selectedPipeline === "ai_only") {
     // Use basePrice from SerpAPI when available
-    const aiInputPrice = Number.isFinite(basePrice) ? basePrice : sellerAskingPrice;
+    const aiInputPrice = normalizedBasePrice ?? sellerAskingPrice;
     
     const aiEstimated = await buildAiEstimatedCloseflowRange({
       aiTools,
@@ -880,11 +846,11 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
         runtime,
       }),
       trendBoostApplied,
-      recommended_price: numberOrNull(tierAdjustedAiRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
+      recommended_price: formatRecommendationPrice(tierAdjustedAiRange.fair),
       price_range: {
-        low: numberOrNull(tierAdjustedAiRange.low) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.low)),
-        fair: numberOrNull(tierAdjustedAiRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.fair)),
-        high: numberOrNull(tierAdjustedAiRange.high) === null ? null : Number(formatRecommendationPrice(tierAdjustedAiRange.high)),
+        low: formatRecommendationPrice(tierAdjustedAiRange.low),
+        fair: formatRecommendationPrice(tierAdjustedAiRange.fair),
+        high: formatRecommendationPrice(tierAdjustedAiRange.high),
       },
       market_confidence: vipMode ? "high" : "low",
       data_source: "ai_estimation",
@@ -892,9 +858,9 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
     };
   }
 
-  const fairPriceValue = numberOrNull(tierAdjustedRange.fair) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.fair));
-  const lowPriceValue = numberOrNull(tierAdjustedRange.low) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.low));
-  const highPriceValue = numberOrNull(tierAdjustedRange.high) === null ? null : Number(formatRecommendationPrice(tierAdjustedRange.high));
+  const fairPriceValue = formatRecommendationPrice(tierAdjustedRange.fair);
+  const lowPriceValue = formatRecommendationPrice(tierAdjustedRange.low);
+  const highPriceValue = formatRecommendationPrice(tierAdjustedRange.high);
 
   const baseConfidence = deterministicPath === "cache" ? "medium" : "high";
   const confidence = vipMode ? "high" : baseConfidence;
@@ -919,6 +885,9 @@ async function buildCloseFlowDecision(input, aiTools = {}, runtime = {}) {
     market_confidence: confidence,
     data_source: deterministicPath === "live_api" ? "live_api" : "cache",
     market_api_calls_consumed: marketCallsConsumed(marketSignals),
+    message: fairPriceValue === null
+      ? "Price temporarily unavailable (market data missing)"
+      : "CloseFlow generated successfully",
   };
 }
 

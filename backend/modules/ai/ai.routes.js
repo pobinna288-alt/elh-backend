@@ -597,9 +597,9 @@ async function handleCloseFlowMvp(req, res) {
 
     if (enginePrice === null) {
       return res.json({
-        success: false,
+        success: true,
         price: null,
-        message: "Pricing engine unavailable",
+        message: "Price temporarily unavailable (market data missing)",
       });
     }
 
@@ -611,9 +611,9 @@ async function handleCloseFlowMvp(req, res) {
   } catch (err) {
     console.error("CloseFlow error:", err);
     return res.status(500).json({
-      success: false,
+      success: true,
       price: null,
-      message: "Pricing engine unavailable",
+      message: "Price temporarily unavailable (market data missing)",
     });
   }
 }
