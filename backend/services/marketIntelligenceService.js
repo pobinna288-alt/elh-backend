@@ -19,8 +19,8 @@ const MARKET_SOURCE = Object.freeze({
 
 const SOURCE_ENV_MAPPING = Object.freeze({
   [MARKET_SOURCE.TRENDS]: {
-    urlKey: "GOOGLE_TRENDS_API_URL",
-    apiKeyKey: "GOOGLE_TRENDS_API_KEY",
+    urlKey: null,
+    apiKeyKey: "SERPAPI_KEY",
     name: "Google Trends",
   },
   [MARKET_SOURCE.EBAY]: {
@@ -131,15 +131,15 @@ function resolveSourceEnv(sourceName) {
 function getSourceReadiness(sourceName) {
   const envKeys = resolveSourceEnv(sourceName);
   const allowKeyless = process.env.ALLOW_KEYLESS_MARKET_APIS === "true";
-  const url = getSanitizedEnv(envKeys.urlKey);
-  const key = getSanitizedEnv(envKeys.apiKeyKey);
+  const url = envKeys.urlKey ? getSanitizedEnv(envKeys.urlKey) : "";
+  const key = envKeys.apiKeyKey ? getSanitizedEnv(envKeys.apiKeyKey) : "";
 
   const reasons = [];
-  if (!url) {
+  if (!url && envKeys.urlKey) {
     reasons.push(`missing ${envKeys.urlKey}`);
   }
 
-  if (!allowKeyless && !key) {
+  if (!allowKeyless && !key && envKeys.apiKeyKey) {
     reasons.push(`missing ${envKeys.apiKeyKey} (ALLOW_KEYLESS_MARKET_APIS=false)`);
   }
 
@@ -441,6 +441,50 @@ async function fetchJson(url, {
 
 async function probeSourceConnectivity(sourceName, retries = MARKET_STARTUP_PROBE_RETRIES) {
   const readiness = getSourceReadiness(sourceName);
+
+  if (sourceName === MARKET_SOURCE.TRENDS) {
+    if (!readiness.key) {
+      return {
+        source: sourceName,
+        reachable: false,
+        skipped: true,
+        reason: readiness.reasons.join("; ") || "missing SERPAPI_KEY",
+      };
+    }
+
+    const attempts = Math.max(1, retries);
+    let lastError = "SerpAPI trends probe failed";
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const result = await getMarketTrends("market demand");
+        if (result && result.success) {
+          return {
+            source: sourceName,
+            reachable: true,
+            skipped: false,
+            attempts: attempt,
+            reason: "reachable",
+          };
+        }
+        lastError = "SerpAPI request failed";
+      } catch (error) {
+        lastError = error?.message || "SerpAPI request failed";
+      }
+
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+      }
+    }
+
+    return {
+      source: sourceName,
+      reachable: false,
+      skipped: false,
+      attempts,
+      reason: lastError,
+    };
+  }
+
   if (!readiness.url) {
     return {
       source: sourceName,

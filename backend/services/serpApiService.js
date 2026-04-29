@@ -1,12 +1,11 @@
 const axios = require("axios");
 
 const BASE_URL = "https://serpapi.com/search";
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
 
 async function getMarketTrends(query) {
   try {
-    if (!SERPAPI_KEY) {
-      console.warn("[SerpAPI] Missing API key");
+    const apiKey = process.env.SERPAPI_KEY;
+    if (!apiKey) {
       return { success: false, data: null };
     }
 
@@ -19,7 +18,7 @@ async function getMarketTrends(query) {
       params: {
         engine: "google_trends",
         q: normalizedQuery,
-        api_key: SERPAPI_KEY,
+        api_key: apiKey,
       },
       timeout: 10000,
     });
@@ -29,7 +28,18 @@ async function getMarketTrends(query) {
       data: response.data,
     };
   } catch (error) {
-    console.error("[SerpAPI ERROR]", error.response?.data || error.message);
+    const status = Number(error?.response?.status);
+    if (status === 401 || status === 403) {
+      console.warn("[SerpAPI] Unauthorized", {
+        status,
+        message: error?.message,
+      });
+    } else {
+      console.warn("[SerpAPI] Request failed", {
+        status: Number.isFinite(status) ? status : null,
+        message: error?.message,
+      });
+    }
 
     return {
       success: false,
