@@ -54,16 +54,7 @@
 
 // ─── AI Model Initialization ────────────────────────────────────────────────
 
-// OpenAI GPT-4o (used by all tiers)
-let openaiClient = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    const { OpenAI } = require("openai");
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-} catch (err) {
-  console.warn("[AI Guardian] OpenAI initialization skipped:", err.message);
-}
+const axios = require("axios");
 
  const { normalizePrice } = require("../utils/normalizePrice");
 
@@ -107,7 +98,7 @@ const ALLOWED_SUBSCRIPTION_LEVELS = ["pro", "hot", "enterprise"];
  * TIER FEATURE GATING
  * 
  * PRO TIER:
- *   - AI: Primary OpenAI reasoning model
+ *   - AI: Primary DeepSeek reasoning model
  *   - confidence_score = 62
  *   - top_target_markets LIMIT: 2 countries
  *   - actionable_insights LIMIT: 3
@@ -115,7 +106,7 @@ const ALLOWED_SUBSCRIPTION_LEVELS = ["pro", "hot", "enterprise"];
  *   - NO enterprise features
  * 
  * HOT TIER (includes Pro):
- *   - AI: Best OpenAI reasoning model
+ *   - AI: Best DeepSeek reasoning model
  *   - confidence_score = 78
  *   - price_intelligence (market_price_range, price_position, pricing_warning)
  *   - top_target_markets LIMIT: 4 countries
@@ -135,9 +126,9 @@ const ALLOWED_SUBSCRIPTION_LEVELS = ["pro", "hot", "enterprise"];
 const SUBSCRIPTION_FEATURES = {
   pro: {
     // AI Model Configuration
-    aiModel: "gpt-4o",
+    aiModel: "deepseek-chat",
     useMultiModel: false,
-    aiModelDescription: "Primary OpenAI reasoning model",
+    aiModelDescription: "Primary reasoning model",
     
     // Fixed confidence score for Pro tier
     confidenceScore: 62,
@@ -167,9 +158,9 @@ const SUBSCRIPTION_FEATURES = {
   
   hot: {
     // AI Model Configuration
-    aiModel: "gpt-4o",
+    aiModel: "deepseek-chat",
     useMultiModel: false,
-    aiModelDescription: "Best OpenAI reasoning model",
+    aiModelDescription: "Best reasoning model",
     
     // Fixed confidence score for Hot tier
     confidenceScore: 78,
@@ -198,10 +189,10 @@ const SUBSCRIPTION_FEATURES = {
   },
   
   enterprise: {
-    // AI Model Configuration - OpenAI GPT-4o (all tiers use OpenAI)
-    aiModel: "gpt-4o",
+    // AI Model Configuration - DeepSeek model with full enterprise features
+    aiModel: "deepseek-chat",
     useMultiModel: false,
-    aiModelDescription: "Advanced OpenAI reasoning model with full enterprise features",
+    aiModelDescription: "DeepSeek model with full enterprise features",
     
     // Fixed confidence score for Enterprise tier
     confidenceScore: 91,
@@ -635,14 +626,15 @@ function calculateSafetyScore(demandAnalysis, audienceMatchScore, competitionAna
   };
 }
 
-// ─── Enterprise AI Analysis (OpenAI) ────────────────────────────────────────
+// ─── Enterprise AI Analysis ────────────────────────────────────────────────
 
 /**
- * OpenAI GPT-4o demand + trend analysis (used for all tiers)
+ * AI demand + trend analysis (used for all tiers)
  */
-async function analyzeWithGPT4o(campaignData) {
-  if (!openaiClient) {
-    return { error: "OpenAI not available", fallback: true };
+async function analyzeWithAi(campaignData) {
+  const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!deepseekApiKey) {
+    return { error: "AI not available", fallback: true };
   }
   
   try {
@@ -663,16 +655,27 @@ Return JSON with:
   "demandConfidence": number 0-100
 }`;
 
-    const completion = await openaiClient.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-      max_tokens: 500
-    });
-    
-    return JSON.parse(completion.choices[0].message.content);
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+    const completion = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: deepseekTimeoutMs,
+      }
+    );
+
+    const content = completion?.data?.choices?.[0]?.message?.content;
+    return content ? JSON.parse(content) : { error: "Empty response", fallback: true };
   } catch (error) {
-    console.error("[AI Guardian GPT-4o]", error.message);
+    console.error("[AI Guardian]", error.message);
     return { error: error.message, fallback: true };
   }
 }
@@ -753,7 +756,8 @@ function generateActionableInsights(campaignData, demandAnalysis, audienceMatchS
  */
 async function generateAutoPost(campaignData) {
   // Generate using AI if available
-  if (openaiClient) {
+  const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (deepseekApiKey) {
     try {
       const prompt = `You are an AI ad copy specialist. Generate optimized ad content for this product.
 
@@ -773,14 +777,27 @@ Generate a JSON response with:
   "call_to_action": "compelling CTA phrase"
 }`;
 
-      const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        max_tokens: 500
-      });
-      
-      return JSON.parse(completion.choices[0].message.content);
+      const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+      const completion = await axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          model: "deepseek-chat",
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${deepseekApiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: deepseekTimeoutMs,
+        }
+      );
+
+      const content = completion?.data?.choices?.[0]?.message?.content;
+      if (content) {
+        return JSON.parse(content);
+      }
     } catch (error) {
       console.error("[AI Guardian Auto Post Generator]", error.message);
     }
@@ -949,7 +966,7 @@ function generateGuardianAnalysisSync(campaignData) {
 
 /**
  * Generate AI-Enhanced Guardian Analysis
- * Uses OpenAI GPT-4o for AI-enhanced insights across all tiers
+ * Uses external AI for enhanced insights across all tiers
  */
 async function generateAIEnhancedGuardianAnalysis(campaignData) {
   const tier = (campaignData.tier || "pro").toLowerCase();
@@ -958,10 +975,13 @@ async function generateAIEnhancedGuardianAnalysis(campaignData) {
   // Get base analysis
   const baseAnalysis = await generateGuardianAnalysis(campaignData);
   
-  // Enhance with OpenAI for all tiers that have access
-  if (openaiClient) {
-    try {
-      const prompt = `You are AI Guardian, a campaign intelligence engine. Analyze this campaign and provide optimization suggestions.
+  const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!deepseekApiKey) {
+    return baseAnalysis;
+  }
+
+  try {
+    const prompt = `You are AI Guardian, a campaign intelligence engine. Analyze this campaign and provide optimization suggestions.
 
 Product: ${campaignData.product_name}
 Description: ${campaignData.product_description}
@@ -984,23 +1004,37 @@ Return JSON with exactly ${features.maxActionableInsights} actionable insights:
   "enhanced_insights": ["array of specific, actionable recommendations"]
 }`;
 
-      const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4o",
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+    const completion = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
-        max_tokens: 500
-      });
-      
-      const aiResponse = JSON.parse(completion.choices[0].message.content);
-      
-      // Merge AI insights with existing insights
-      if (aiResponse.enhanced_insights && aiResponse.enhanced_insights.length > 0) {
-        baseAnalysis.actionable_insights = aiResponse.enhanced_insights.slice(0, features.maxActionableInsights);
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: deepseekTimeoutMs,
       }
-    } catch (error) {
-      console.error("[AI Guardian AI Enhancement]", error.message);
-      // Continue with base analysis on error
+    );
+
+    const content = completion?.data?.choices?.[0]?.message?.content;
+    if (!content) {
+      return baseAnalysis;
     }
+
+    const aiResponse = JSON.parse(content);
+
+    // Merge AI insights with existing insights
+    if (Array.isArray(aiResponse?.enhanced_insights) && aiResponse.enhanced_insights.length > 0) {
+      baseAnalysis.actionable_insights = aiResponse.enhanced_insights.slice(0, features.maxActionableInsights);
+    }
+  } catch (error) {
+    console.error("[AI Guardian AI Enhancement]", error.message);
+    // Continue with base analysis on error
   }
   
   return baseAnalysis;
@@ -1041,7 +1075,7 @@ function getFeatureComparison() {
     tiers: {
       pro: {
         name: "Pro",
-        aiModel: "Primary OpenAI reasoning model",
+        aiModel: "Primary reasoning model",
         confidenceScore: 62,
         limits: {
           topTargetMarkets: 2,
@@ -1062,7 +1096,7 @@ function getFeatureComparison() {
       },
       hot: {
         name: "Hot",
-        aiModel: "Best OpenAI reasoning model",
+        aiModel: "Best reasoning model",
         confidenceScore: 78,
         limits: {
           topTargetMarkets: 4,
@@ -1088,7 +1122,7 @@ function getFeatureComparison() {
       },
       enterprise: {
         name: "Enterprise",
-        aiModel: "Advanced OpenAI reasoning model with full enterprise features",
+        aiModel: "Advanced reasoning model with full enterprise features",
         confidenceScore: 91,
         limits: {
           topTargetMarkets: 6,

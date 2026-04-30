@@ -134,7 +134,7 @@ const requireEnterpriseAccess = (req, res, next) => {
 
 /**
  * Middleware to enforce AI quota for Enterprise features
- * SECURITY FIX: Ensures quota checks happen BEFORE expensive OpenAI calls
+ * SECURITY FIX: Ensures quota checks happen BEFORE expensive AI calls
  */
 const requireEnterpriseAiQuota = (req, res, next) => {
   const authenticatedUser = req.user || req.currentUser;
@@ -291,8 +291,8 @@ router.post("/generate", requireAutoPostAccess, async (req, res) => {
 
 /**
  * Generate AI-enhanced auto-post content (Enterprise only)
- * Uses OpenAI for advanced content generation
- * SECURITY FIX: Added requireEnterpriseAiQuota to check quotas BEFORE OpenAI call
+ * Uses external AI for advanced content generation
+ * SECURITY FIX: Added requireEnterpriseAiQuota to check quotas BEFORE external AI call
  */
 router.post("/generate-ai", requireEnterpriseAccess, requireEnterpriseAiQuota, async (req, res) => {
   try {

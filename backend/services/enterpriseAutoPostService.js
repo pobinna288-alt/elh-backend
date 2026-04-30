@@ -15,16 +15,7 @@
  *   • Conversion Optimizer
  */
 
-// Initialize OpenAI conditionally
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    const { OpenAI } = require("openai");
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-} catch (err) {
-  console.warn("[Enterprise Auto-Post] OpenAI initialization skipped:", err.message);
-}
+const axios = require("axios");
 
  const { normalizePrice } = require("../utils/normalizePrice");
 
@@ -574,37 +565,48 @@ function generateAutoPostFallback(payload, fullFeatures = false) {
 }
 
 /**
- * Generate Auto-Post content with AI (OpenAI)
+ * Generate Auto-Post content with AI (DeepSeek)
  * @param {object} payload - Product data
  * @returns {object} - AI-generated content
  */
 async function generateAutoPostWithAI(payload) {
-  if (!openai) {
-    console.warn("[Enterprise Auto-Post] OpenAI not available, using fallback");
+  const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!deepseekApiKey) {
+    console.warn("[Enterprise Auto-Post] AI not available, using fallback");
     return generateAutoPostFallback(payload, true);
   }
   
   try {
     const prompt = generateMasterPrompt(payload);
     
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are the AI Sales Intelligence Engine (v2 ENTERPRISE FUSION SYSTEM). Return ONLY valid JSON with one optimized result, no explanations or markdown."
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+    const response = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: "You are the AI Sales Intelligence Engine (v2 ENTERPRISE FUSION SYSTEM). Return ONLY valid JSON with one optimized result, no explanations or markdown."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
         },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2500,
-      response_format: { type: "json_object" }
-    });
-    
-    const content = response.choices[0]?.message?.content;
+        timeout: deepseekTimeoutMs,
+      }
+    );
+
+    const content = response?.data?.choices?.[0]?.message?.content;
     
     if (!content) {
       throw new Error("Empty response from AI");
@@ -651,7 +653,7 @@ async function generateAutoPostWithAI(payload) {
         generatedAt: new Date().toISOString(),
         aiPowered: true,
         fullFeatures: true,
-        model: "gpt-4o"
+        model: "deepseek-chat"
       }
     };
     

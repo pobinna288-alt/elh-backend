@@ -4,7 +4,7 @@
  * 
  * Endpoints:
  *   POST /ads/improvement/analyze     - Generate Ad Improvement Report
- *   POST /ads/improvement/analyze-ai  - Generate AI-Enhanced Report (uses OpenAI)
+ *   POST /ads/improvement/analyze-ai  - Generate AI-Enhanced Report (uses external AI)
  *   GET  /ads/improvement/features    - Get features by subscription level
  * 
  * Access Control:
@@ -275,7 +275,7 @@ router.post("/analyze", requireSubscriptionAccess, async (req, res) => {
 // ─── POST /ads/improvement/analyze-ai ───────────────────────────────────────
 /**
  * Generate AI-Enhanced Ad Improvement Report
- * Uses OpenAI for more nuanced analysis (Enterprise gets enhanced AI suggestions)
+ * Uses external AI for more nuanced analysis (Enterprise gets enhanced AI suggestions)
  * 
  * Same request/response format as /analyze, with optional additional AI insights
  */
@@ -478,7 +478,7 @@ router.get("/docs", (_req, res) => {
       {
         method: "POST",
         path: "/ads/improvement/analyze-ai",
-        description: "Generate AI-Enhanced Report (uses OpenAI for Enterprise)",
+        description: "Generate AI-Enhanced Report (uses external AI for Enterprise)",
         requiredFields: ["subscriptionLevel", "title OR description"],
         optionalFields: ["media", "category", "targetAudience", "attentionScore"]
       },
@@ -706,10 +706,10 @@ router.post("/enterprise/ad-doctor", requireEnterpriseAccess, async (req, res) =
 // ─── POST /ads/improvement/enterprise/ad-doctor-ai ──────────────────────────
 /**
  * Generate AI-Enhanced Enterprise Ad Doctor Report
- * Uses OpenAI for deeper strategic analysis (when API key available)
+ * Uses external AI for deeper strategic analysis (when API key available)
  * 
  * Same request format as /enterprise/ad-doctor
- * Response includes additional aiEnhancedInsights when OpenAI is configured
+ * Response includes additional aiEnhancedInsights when AI is configured
  */
 router.post("/enterprise/ad-doctor-ai", requireEnterpriseAccess, async (req, res) => {
   try {
@@ -789,7 +789,7 @@ router.get("/enterprise/ad-doctor/docs", (req, res) => {
         accessLevel: "Enterprise only"
       },
       "POST /ads/improvement/enterprise/ad-doctor-ai": {
-        description: "Generate AI-Enhanced Report with OpenAI integration",
+        description: "Generate AI-Enhanced Report with external AI integration",
         accessLevel: "Enterprise only"
       }
     },

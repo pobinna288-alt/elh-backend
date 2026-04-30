@@ -8,15 +8,6 @@ const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const { randomUUID } = require("crypto");
 
-let OpenAI;
-try {
-  OpenAI = require("openai");
-} catch (_error) {
-  OpenAI = null;
-}
-
-let openaiClient = null;
-
 const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
 
@@ -183,41 +174,47 @@ app.post("/api/generate-ad", async (req, res) => {
       return res.status(400).json({ error: "Invalid request: product is required" });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OpenAI API key missing" });
+    const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+    if (!deepseekApiKey) {
+      return res.status(500).json({ error: "DeepSeek API key missing" });
     }
 
-    if (!OpenAI) {
-      return res.status(500).json({ error: "OpenAI SDK not installed" });
-    }
+    const deepseekBaseUrl = "https://api.deepseek.com";
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
 
-    if (!openaiClient) {
-      const OpenAIClass = OpenAI?.OpenAI || OpenAI?.default || OpenAI;
-      openaiClient = new OpenAIClass({ apiKey: process.env.OPENAI_API_KEY });
-    }
-
-    const response = await openaiClient.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: [
-            "Create an ad title and ad description.",
-            "",
-            `Product: ${product}`,
-            "",
-            "Return format:",
-            "Title: ...",
-            "Description: ...",
-          ].join("\n"),
+    const response = await axios.post(
+      `${deepseekBaseUrl}/v1/chat/completions`,
+      {
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "user",
+            content: [
+              "Create an ad title and ad description.",
+              "",
+              `Product: ${product}`,
+              "",
+              "Return format:",
+              "Title: ...",
+              "Description: ...",
+            ].join("\n"),
+          },
+        ],
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
         },
-      ],
-    });
+        timeout: deepseekTimeoutMs,
+      }
+    );
 
-    const text = String(response?.choices?.[0]?.message?.content || "").trim();
+    const text = String(response?.data?.choices?.[0]?.message?.content || "").trim();
 
     if (!text) {
-      throw new Error("Empty response from OpenAI");
+      throw new Error("Empty response from DeepSeek");
     }
 
     const titleMatch = text.match(/\bTitle:\s*(.+)/i);
@@ -246,7 +243,7 @@ app.post("/api/generate-ad", async (req, res) => {
       stack: error?.stack,
     });
     return res.status(500).json({
-      error: "Internal Server Error",
+      error: "AI request failed",
       details: error?.message || "Unknown error",
     });
   }

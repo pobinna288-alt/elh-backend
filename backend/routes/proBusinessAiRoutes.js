@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { OpenAI } = require("openai");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const axios = require("axios");
 
 // Import your database models (adjust paths/names to your project)
 const { User, Subscription, AiUsage } = require("../models");
@@ -242,14 +241,29 @@ router.post("/pro-business/ai", async (req, res) => {
     // 6️⃣ Build tool-specific prompt (backend-only)
     const prompt = buildPrompt(tool, prompt_data);
 
-    // 7️⃣ Call OpenAI (GPT-5-mini or similar), temperature = 0.7
-    const aiResponse = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-    });
+    const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+    if (!deepseekApiKey) {
+      return res.status(500).json({ error: "AI provider key missing" });
+    }
 
-    const rawContent = aiResponse.choices[0].message.content || "";
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+    const aiResponse = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: deepseekTimeoutMs,
+      }
+    );
+
+    const rawContent = aiResponse?.data?.choices?.[0]?.message?.content || "";
 
     // 8️⃣ Parse JSON safely before returning
     let parsed;

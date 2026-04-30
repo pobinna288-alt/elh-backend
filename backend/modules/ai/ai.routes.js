@@ -1,4 +1,5 @@
 const express = require("express");
+const axios = require("axios");
 const enterpriseAutoPostRoutes = require("../../routes/enterpriseAutoPostRoutes");
 const {
   buildSmartCopywriterDecision,
@@ -18,18 +19,8 @@ const { createAiUsageGuard } = require("../../middleware/aiUsageGuardMiddleware"
 const { createAiService } = require("./ai.service");
 const { createAiController } = require("./ai.controller");
 
-let openaiClient = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    const { OpenAI } = require("openai");
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-} catch (error) {
-  console.warn("[AI Routes] OpenAI initialization skipped:", error.message);
-}
-
-const OPENAI_LATEST_MODEL = process.env.OPENAI_LATEST_MODEL || "gpt-5";
-const OPENAI_DEFAULT_MODEL = process.env.OPENAI_DEFAULT_MODEL || "gpt-4o-mini";
+const AI_LATEST_MODEL = process.env.AI_LATEST_MODEL || "deepseek-chat";
+const AI_DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL || "deepseek-chat";
 const EXTERNAL_AI_TIMEOUT_MS = Number.parseInt(process.env.EXTERNAL_AI_TIMEOUT_MS || process.env.EXTERNAL_CALL_TIMEOUT_MS || "12000", 10);
 
 const FEATURE_GATE_STATE = {
@@ -229,17 +220,23 @@ async function withExternalTimeout(taskFn, label) {
   }
 }
 
-async function checkOpenAiModelAccess(modelName) {
-  if (!openaiClient || !modelName) {
+async function checkAiModelAccess(modelName) {
+  const apiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!apiKey || !modelName) {
     return false;
   }
 
   try {
-    await withExternalTimeout(
-      () => openaiClient.models.retrieve(modelName),
-      `OpenAI model accessibility check (${modelName})`
+    const response = await withExternalTimeout(
+      () => axios.get("https://api.deepseek.com/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: EXTERNAL_AI_TIMEOUT_MS,
+      }),
+      `AI model accessibility check (${modelName})`
     );
-    return true;
+
+    const models = Array.isArray(response?.data?.data) ? response.data.data : [];
+    return models.some((item) => item?.id === modelName);
   } catch (_error) {
     return false;
   }
@@ -255,13 +252,13 @@ async function initializeAiHealthState(options = {}) {
 
   try {
     const marketHealth = await runMarketIntelligenceHealthCheck();
-    const defaultModelOk = await checkOpenAiModelAccess(OPENAI_DEFAULT_MODEL);
-    const latestModelOk = await checkOpenAiModelAccess(OPENAI_LATEST_MODEL);
+    const defaultModelOk = await checkAiModelAccess(AI_DEFAULT_MODEL);
+    const latestModelOk = await checkAiModelAccess(AI_LATEST_MODEL);
 
     FEATURE_GATE_STATE.checks = {
       ...marketHealth.checks,
-      openAiDefaultModelAccessible: defaultModelOk,
-      openAiLatestModelAccessible: latestModelOk,
+      aiDefaultModelAccessible: defaultModelOk,
+      aiLatestModelAccessible: latestModelOk,
     };
 
     const closeflowDisableReasons = [];
@@ -287,18 +284,18 @@ async function initializeAiHealthState(options = {}) {
     }
 
     if (!defaultModelOk) {
-      closeflowDisableReasons.push("OpenAI default model unavailable");
+      closeflowDisableReasons.push("AI default model unavailable");
       if (!forceCloseflow) {
-        markFeatureDisabled("ad_guardian", "OpenAI default model unavailable");
+        markFeatureDisabled("ad_guardian", "AI default model unavailable");
         if (!marketHealth.checks.fallbackEngineWorking) {
-          markFeatureDisabled("closeflow", "OpenAI default model unavailable");
+          markFeatureDisabled("closeflow", "AI default model unavailable");
         }
-        markFeatureDisabled("ad_improvement", "OpenAI default model unavailable");
+        markFeatureDisabled("ad_improvement", "AI default model unavailable");
       }
     }
 
     if (!latestModelOk && !forceCloseflow) {
-      markFeatureDisabled("revenue_copy", "OpenAI latest model unavailable");
+      markFeatureDisabled("revenue_copy", "AI latest model unavailable");
     }
 
     if (forceCloseflow) {
@@ -367,24 +364,35 @@ function requireFeatureHealthy(featureKey) {
 }
 
 async function generateTextWithAi({ systemPrompt, userPrompt, fallbackText, temperature = 0.7, model }) {
-  if (!openaiClient) {
+  const apiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!apiKey) {
     return fallbackText;
   }
 
   try {
     const completion = await withExternalTimeout(
-      () => openaiClient.chat.completions.create({
-        model: model || OPENAI_DEFAULT_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature,
-      }),
-      "OpenAI text generation"
+      () => axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          model: model || AI_DEFAULT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: EXTERNAL_AI_TIMEOUT_MS,
+        }
+      ),
+      "AI text generation"
     );
 
-    return sanitizeText(completion.choices?.[0]?.message?.content, fallbackText) || fallbackText;
+    return sanitizeText(completion?.data?.choices?.[0]?.message?.content, fallbackText) || fallbackText;
   } catch (error) {
     console.warn("[AI Routes] Falling back to local response:", error.message);
     return fallbackText;
@@ -392,25 +400,36 @@ async function generateTextWithAi({ systemPrompt, userPrompt, fallbackText, temp
 }
 
 async function generateJsonWithAi({ systemPrompt, userPrompt, fallbackData, temperature = 0.4, model }) {
-  if (!openaiClient) {
+  const apiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+  if (!apiKey) {
     return fallbackData;
   }
 
   try {
     const completion = await withExternalTimeout(
-      () => openaiClient.chat.completions.create({
-        model: model || OPENAI_DEFAULT_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature,
-        response_format: { type: "json_object" },
-      }),
-      "OpenAI JSON generation"
+      () => axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          model: model || AI_DEFAULT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature,
+          response_format: { type: "json_object" },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: EXTERNAL_AI_TIMEOUT_MS,
+        }
+      ),
+      "AI JSON generation"
     );
 
-    const rawContent = completion.choices?.[0]?.message?.content;
+    const rawContent = completion?.data?.choices?.[0]?.message?.content;
     if (!rawContent) {
       return fallbackData;
     }
@@ -527,7 +546,7 @@ async function handleCopywriter(req, res) {
     const decision = await buildSmartCopywriterDecision(payload, {
       generateTextWithAi,
       generateJsonWithAi,
-      latestModel: OPENAI_LATEST_MODEL,
+      latestModel: AI_LATEST_MODEL,
     }, {
       requestCycleId: getRequestCycleId(req),
       userId: resolveUserId(req),

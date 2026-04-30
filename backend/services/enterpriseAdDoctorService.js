@@ -15,16 +15,7 @@
  *   • Engagement optimization
  */
 
-// Initialize OpenAI conditionally
-let openai = null;
-try {
-  if (process.env.OPENAI_API_KEY) {
-    const { OpenAI } = require("openai");
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-} catch (err) {
-  console.warn("[Enterprise Ad Doctor] OpenAI initialization skipped:", err.message);
-}
+const axios = require("axios");
 
 // ─── Access Control ─────────────────────────────────────────────────────────
 
@@ -791,15 +782,17 @@ async function generateEnterpriseAdDoctorReport({
 }
 
 /**
- * Generate AI-Enhanced Enterprise Report using OpenAI (optional enhancement)
- * Uses OpenAI for deeper strategic analysis when API key is available
+ * Generate AI-Enhanced Enterprise Report using DeepSeek (optional enhancement)
+ * Uses DeepSeek for deeper strategic analysis when API key is available
  */
 async function generateAIEnhancedEnterpriseReport(params) {
   // First generate the base Enterprise report
   const baseReport = await generateEnterpriseAdDoctorReport(params);
 
-  // If there's an error or OpenAI not configured, return base report
-  if (baseReport.error || !openai) {
+  const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
+
+  // If there's an error or AI not configured, return base report
+  if (baseReport.error || !deepseekApiKey) {
     return baseReport;
   }
 
@@ -824,14 +817,24 @@ Provide enterprise-level strategic insights in JSON format:
   "conversionBooster": "one high-impact conversion optimization tip"
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 600,
-      temperature: 0.7
-    });
+    const deepseekTimeoutMs = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 20000;
+    const completion = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${deepseekApiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: deepseekTimeoutMs,
+      }
+    );
 
-    const aiResponse = completion.choices[0]?.message?.content;
+    const aiResponse = completion?.data?.choices?.[0]?.message?.content;
     if (aiResponse) {
       try {
         const aiData = JSON.parse(aiResponse);
