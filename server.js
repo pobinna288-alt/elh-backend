@@ -6,10 +6,17 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
-const { randomBytes } = require("crypto");
+const { randomUUID } = require("crypto");
+
+let OpenAI;
+try {
+  OpenAI = require("openai");
+} catch (_error) {
+  OpenAI = null;
+}
 
 const generatePaymentReference = () =>
-  `elh_pay_${Date.now()}_${randomBytes(8).toString("hex")}`;
+  `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4010;
@@ -161,6 +168,60 @@ app.get("/api/health", (_req, res) => {
     success: true,
     message: "Backend is running"
   });
+});
+
+app.post("/api/generate-ad", async (req, res) => {
+  try {
+    const product = String(req.body?.product || "").trim();
+
+    if (!product) {
+      return res.status(400).json({ error: "Product is required" });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key missing" });
+    }
+
+    if (!OpenAI) {
+      return res.status(500).json({ error: "OpenAI SDK not installed" });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            "Create an ad title and ad description.",
+            "",
+            `Product: ${product}`,
+            "",
+            "Return format:",
+            "Title: ...",
+            "Description: ...",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    const text = String(response?.choices?.[0]?.message?.content || "").trim();
+
+    const titleMatch = text.match(/\bTitle:\s*(.+)/i);
+    const descriptionMatch = text.match(/\bDescription:\s*([\s\S]+)/i);
+
+    const title = String(titleMatch?.[1] || "").trim();
+    const description = String(descriptionMatch?.[1] || "").trim();
+
+    return res.json({
+      title,
+      description,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
 });
 
 app.post("/api/payments/initialize", async (req, res) => {
