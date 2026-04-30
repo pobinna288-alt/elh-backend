@@ -156,7 +156,11 @@ const isValidEmail = (value) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-const { getSmtpTransporter } = require("./backend/services/emailService");
+const { Resend } = require("resend");
+
+const resend = String(process.env.RESEND_API_KEY || "").trim()
+  ? new Resend(String(process.env.RESEND_API_KEY || "").trim())
+  : null;
 
 app.get("/api/health", (_req, res) => {
   return res.status(200).json({
@@ -253,37 +257,36 @@ app.post("/api/generate-ad", async (req, res) => {
 
 app.get("/test-email", async (_req, res) => {
   try {
-    const transporter = getSmtpTransporter();
-    if (!transporter) {
+    if (!resend) {
       return res.status(500).json({
         success: false,
-        message: "SMTP transporter not configured",
+        message: "RESEND_API_KEY not configured",
       });
     }
 
-    const from = String(process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
-    const to = String(process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
-
-    if (!from || !to) {
+    const to = String(process.env.EMAIL_USER || "").trim();
+    if (!to) {
       return res.status(500).json({
         success: false,
-        message: "Missing EMAIL_USER/SMTP_USER for diagnostic send",
+        message: "EMAIL_USER not configured",
       });
     }
 
-    await transporter.sendMail({
-      from,
+    const response = await resend.emails.send({
+      from: "onboarding@resend.dev",
       to,
-      subject: "SMTP Test",
-      text: "If you see this, email works",
+      subject: "OTP Test Email",
+      html: "<h2>OTP system working ✅</h2>",
     });
 
     return res.json({
       success: true,
       message: "Email sent successfully",
+      id: response?.id,
     });
   } catch (err) {
-    console.error("EMAIL ERROR:", err);
+    console.error("TEST EMAIL ERROR:", err);
+
     return res.status(500).json({
       success: false,
       message: err?.message || "Unknown error",
