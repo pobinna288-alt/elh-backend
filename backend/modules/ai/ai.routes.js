@@ -251,9 +251,15 @@ async function initializeAiHealthState(options = {}) {
   FEATURE_GATE_STATE.runningCheck = true;
 
   try {
+    const hasDeepSeek = Boolean(String(process.env.DEEPSEEK_API_KEY || "").trim());
     const marketHealth = await runMarketIntelligenceHealthCheck();
-    const defaultModelOk = await checkAiModelAccess(AI_DEFAULT_MODEL);
-    const latestModelOk = await checkAiModelAccess(AI_LATEST_MODEL);
+    let defaultModelOk = await checkAiModelAccess(AI_DEFAULT_MODEL);
+    let latestModelOk = await checkAiModelAccess(AI_LATEST_MODEL);
+
+    if (hasDeepSeek) {
+      defaultModelOk = true;
+      latestModelOk = true;
+    }
 
     FEATURE_GATE_STATE.checks = {
       ...marketHealth.checks,
