@@ -156,6 +156,8 @@ const isValidEmail = (value) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+const { getSmtpTransporter } = require("./backend/services/emailService");
+
 app.get("/api/health", (_req, res) => {
   return res.status(200).json({
     success: true,
@@ -245,6 +247,46 @@ app.post("/api/generate-ad", async (req, res) => {
     return res.status(500).json({
       error: "AI request failed",
       details: error?.message || "Unknown error",
+    });
+  }
+});
+
+app.get("/test-email", async (_req, res) => {
+  try {
+    const transporter = getSmtpTransporter();
+    if (!transporter) {
+      return res.status(500).json({
+        success: false,
+        message: "SMTP transporter not configured",
+      });
+    }
+
+    const from = String(process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
+    const to = String(process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
+
+    if (!from || !to) {
+      return res.status(500).json({
+        success: false,
+        message: "Missing EMAIL_USER/SMTP_USER for diagnostic send",
+      });
+    }
+
+    await transporter.sendMail({
+      from,
+      to,
+      subject: "SMTP Test",
+      text: "If you see this, email works",
+    });
+
+    return res.json({
+      success: true,
+      message: "Email sent successfully",
+    });
+  } catch (err) {
+    console.error("EMAIL ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: err?.message || "Unknown error",
     });
   }
 });

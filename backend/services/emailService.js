@@ -458,6 +458,7 @@ module.exports = {
   EMAIL_CONFIG,
   EMAIL_TEMPLATES,
   assertSmtpConfigured,
+  getSmtpTransporter,
   sendPasswordResetEmail,
   sendWelcomeEmail,
   sendPasswordChangedEmail,
