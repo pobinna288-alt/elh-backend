@@ -37,7 +37,7 @@ const jwt     = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 
 const { getEmailOtpStore } = require("../services/emailOtpStore");
-const { sendOtpEmail, assertSmtpConfigured } = require("../services/emailService");
+const { sendOtpEmail, assertOtpEmailConfigured } = require("../services/emailService");
 
 const router = express.Router();
 
@@ -60,12 +60,12 @@ const CFG = {
 
 /**
  * Wire the JWT secret and return the mounted router.
- * Also asserts SMTP configuration is present in production so the server
- * refuses to start rather than silently skipping email delivery.
+ * Also asserts OTP email configuration is present in production so the server
+ * refuses to start rather than silently skipping OTP delivery.
  */
 const initEmailAuthRoutes = (jwtSecret) => {
   _jwtSecret = jwtSecret;
-  assertSmtpConfigured(); // throws in production if SMTP env vars are missing
+  assertOtpEmailConfigured();
   return router;
 };
 

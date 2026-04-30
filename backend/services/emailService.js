@@ -19,6 +19,17 @@ const EMAIL_CONFIG = {
   frontendUrl: process.env.BASE_URL || process.env.FRONTEND_URL || ""
 };
 
+const resendApiKey = String(process.env.RESEND_API_KEY || "").trim();
+let _resendClient = null;
+const getResendClient = () => {
+  if (_resendClient) return _resendClient;
+  if (!resendApiKey) return null;
+  // eslint-disable-next-line global-require
+  const { Resend } = require("resend");
+  _resendClient = new Resend(resendApiKey);
+  return _resendClient;
+};
+
 // ============================================
 // SMTP TRANSPORT (optional – requires nodemailer + SMTP_HOST env var)
 // ============================================
@@ -49,6 +60,18 @@ const assertSmtpConfigured = () => {
     return { enabled: false, missing };
   }
   return { enabled: true, missing: [] };
+};
+
+/**
+ * OTP delivery uses Resend in production.
+ * In MVP mode, missing RESEND_API_KEY should be treated as a configuration error.
+ */
+const assertOtpEmailConfigured = () => {
+  const hasResend = Boolean(String(process.env.RESEND_API_KEY || "").trim());
+  if (!hasResend && process.env.NODE_ENV === "production") {
+    throw new Error("RESEND_API_KEY must be set to deliver OTP emails");
+  }
+  return { enabled: hasResend, provider: hasResend ? "resend" : "disabled" };
 };
 
 /**
@@ -442,12 +465,19 @@ const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
     return { success: true, messageId: `dev-${Date.now()}`, provider: "console" };
   }
 
-  return dispatchEmail({
+  const resend = getResendClient();
+  if (!resend) {
+    throw new Error("RESEND_API_KEY not configured");
+  }
+
+  const response = await resend.emails.send({
+    from: "onboarding@resend.dev",
     to,
     subject: template.subject,
-    html:    template.getHtml(otp, expiryMinutes),
-    text:    template.getText(otp, expiryMinutes),
+    html: template.getHtml(otp, expiryMinutes),
   });
+
+  return { success: true, messageId: response?.id || null, provider: "resend" };
 };
 
 // ============================================
@@ -457,6 +487,7 @@ const sendOtpEmail = async (to, otp, expiryMinutes = 10) => {
 module.exports = {
   EMAIL_CONFIG,
   EMAIL_TEMPLATES,
+  assertOtpEmailConfigured,
   assertSmtpConfigured,
   getSmtpTransporter,
   sendPasswordResetEmail,
