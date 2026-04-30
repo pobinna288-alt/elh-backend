@@ -15,6 +15,8 @@ try {
   OpenAI = null;
 }
 
+let openaiClient = null;
+
 const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
 
@@ -172,10 +174,13 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/generate-ad", async (req, res) => {
   try {
-    const product = String(req.body?.product || "").trim();
+    console.log("[generate-ad] Incoming request body:", req.body);
+
+    const rawProduct = req.body?.product;
+    const product = typeof rawProduct === "string" ? rawProduct.trim() : "";
 
     if (!product) {
-      return res.status(400).json({ error: "Product is required" });
+      return res.status(400).json({ error: "Invalid request: product is required" });
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -186,9 +191,12 @@ app.post("/api/generate-ad", async (req, res) => {
       return res.status(500).json({ error: "OpenAI SDK not installed" });
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (!openaiClient) {
+      const OpenAIClass = OpenAI?.OpenAI || OpenAI?.default || OpenAI;
+      openaiClient = new OpenAIClass({ apiKey: process.env.OPENAI_API_KEY });
+    }
 
-    const response = await openai.chat.completions.create({
+    const response = await openaiClient.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
@@ -208,19 +216,39 @@ app.post("/api/generate-ad", async (req, res) => {
 
     const text = String(response?.choices?.[0]?.message?.content || "").trim();
 
+    if (!text) {
+      throw new Error("Empty response from OpenAI");
+    }
+
     const titleMatch = text.match(/\bTitle:\s*(.+)/i);
     const descriptionMatch = text.match(/\bDescription:\s*([\s\S]+)/i);
 
-    const title = String(titleMatch?.[1] || "").trim();
-    const description = String(descriptionMatch?.[1] || "").trim();
+    let title = String(titleMatch?.[1] || "").trim();
+    let description = String(descriptionMatch?.[1] || "").trim();
+
+    if (!title || !description) {
+      const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (!title) {
+        title = String(lines[0] || "").replace(/^Title:\s*/i, "").trim();
+      }
+      if (!description) {
+        description = lines.slice(1).join(" ").replace(/^Description:\s*/i, "").trim();
+      }
+    }
 
     return res.json({
       title,
       description,
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Server error" });
+    console.error("[generate-ad] Error:", {
+      message: error?.message,
+      stack: error?.stack,
+    });
+    return res.status(500).json({
+      error: "Internal Server Error",
+      details: error?.message || "Unknown error",
+    });
   }
 });
 
