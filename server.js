@@ -148,6 +148,28 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+
+  // Handle pre-flight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+try {
+  const adsRoute = require("./backend/routes/ads");
+  app.use("/api/ads", adsRoute);
+} catch (error) {
+  console.warn("Ads route was not attached", {
+    message: error?.message || "unknown error"
+  });
+}
+
 console.log("PAYSTACK KEY LOADED:", !!process.env.PAYSTACK_SECRET_KEY);
 console.log("NODE ENV:", process.env.NODE_ENV);
 
