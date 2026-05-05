@@ -44,6 +44,21 @@ const createRuntimeStore = () => ({
 const runtimeStore = createRuntimeStore();
 app.set("database", runtimeStore);
 
+const users = [
+  {
+    id: 1,
+    name: "Test User",
+    coins: 50000,
+    unlocked: []
+  }
+];
+
+const COIN_TIERS = {
+  BASIC: 20000,
+  PRO: 60000,
+  ELITE: 120000
+};
+
 const createAuthenticateToken = (jwtSecret) => {
   return (req, res, next) => {
     const authorizationHeader = req.headers.authorization || req.headers.Authorization;
@@ -222,6 +237,66 @@ app.get("/search", (req, res) => {
       message: "Search error"
     });
   }
+});
+
+app.post("/unlock", (req, res) => {
+  try {
+    const { userId, contentId, tier } = req.body;
+
+    const user = users.find((u) => u.id === userId);
+
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const cost = COIN_TIERS[tier];
+
+    if (!cost) {
+      return res.json({
+        success: false,
+        message: "Invalid tier"
+      });
+    }
+
+    if (user.coins < cost) {
+      return res.json({
+        success: false,
+        message: "Not enough coins"
+      });
+    }
+
+    user.coins -= cost;
+    user.unlocked.push(contentId);
+
+    return res.json({
+      success: true,
+      message: "Unlocked successfully",
+      remainingCoins: user.coins,
+      unlocked: user.unlocked
+    });
+  } catch (_err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+});
+
+app.get("/user/:id", (req, res) => {
+  const user = users.find((u) => u.id == req.params.id);
+
+  if (!user) {
+    return res.json({ success: false });
+  }
+
+  return res.json({
+    success: true,
+    coins: user.coins,
+    unlocked: user.unlocked
+  });
 });
 
 app.post("/api/generate-ad", async (req, res) => {
