@@ -12,6 +12,11 @@ const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
 
 const app = express();
+app.use(
+  cors({
+    origin: "*"
+  })
+);
 const PORT = Number(process.env.PORT) || 4010;
 const PAYSTACK_INITIALIZE_URL = "https://api.paystack.co/transaction/initialize";
 const PAYSTACK_VERIFY_URL = "https://api.paystack.co/transaction/verify";
@@ -189,6 +194,34 @@ app.get("/api/health", (_req, res) => {
     success: true,
     message: "Backend is running"
   });
+});
+
+app.get("/search", (req, res) => {
+  try {
+    const q = req.query.q?.toLowerCase() || "";
+
+    const ads = [
+      { id: 1, title: "Barber Shop Ad", type: "ad" },
+      { id: 2, title: "Football Shoes Ad", type: "ad" },
+      { id: 3, title: "Tech Gadget Ad", type: "ad" }
+    ];
+
+    const videos = [
+      { id: 1, title: "Barber Tutorial", type: "video" },
+      { id: 2, title: "Football Skills", type: "video" }
+    ];
+
+    return res.json({
+      success: true,
+      ads: ads.filter((a) => a.title.toLowerCase().includes(q)),
+      videos: videos.filter((v) => v.title.toLowerCase().includes(q))
+    });
+  } catch (_err) {
+    return res.status(500).json({
+      success: false,
+      message: "Search error"
+    });
+  }
 });
 
 app.post("/api/generate-ad", async (req, res) => {
