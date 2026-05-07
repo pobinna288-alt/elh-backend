@@ -68,7 +68,14 @@ const createAuthenticateToken = (jwtSecret) => {
         req.url.startsWith("/api/attention-score")
       );
 
-    if (isPublicAttentionScoreGET) {
+    const isPublicSearchGET =
+      req.method === "GET" &&
+      (
+        req.originalUrl.startsWith("/api/search") ||
+        req.url.startsWith("/api/search")
+      );
+
+    if (isPublicAttentionScoreGET || isPublicSearchGET) {
       return next();
     }
 
