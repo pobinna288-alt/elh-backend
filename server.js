@@ -61,6 +61,17 @@ const COIN_TIERS = {
 
 const createAuthenticateToken = (jwtSecret) => {
   return (req, res, next) => {
+    const isPublicAttentionScoreGET =
+      req.method === "GET" &&
+      (
+        req.originalUrl.startsWith("/api/attention-score") ||
+        req.url.startsWith("/api/attention-score")
+      );
+
+    if (isPublicAttentionScoreGET) {
+      return next();
+    }
+
     const authorizationHeader = req.headers.authorization || req.headers.Authorization;
 
     if (typeof authorizationHeader !== "string") {
@@ -103,6 +114,22 @@ const attachRestoredRoutes = () => {
   const authenticateToken = createAuthenticateToken(jwtSecret);
   let hasTrustRoutes = false;
   let hasAttentionRoutes = false;
+  let hasPublicAttentionScoreRoutes = false;
+
+  try {
+    const { createAttentionScoreRouter } = require("./backend/routes/attentionScoreRoutes");
+    const attentionScoreRouter = createAttentionScoreRouter({ authenticateToken });
+
+    app.use("/api/attention-score", (req, res, next) => {
+      return attentionScoreRouter(req, res, next);
+    });
+
+    hasPublicAttentionScoreRoutes = true;
+  } catch (error) {
+    console.warn("Attention score routes were not attached", {
+      message: error?.message || "unknown error"
+    });
+  }
 
   try {
     const { registerAppRoutes } = require("./backend/routes");
@@ -160,7 +187,9 @@ const attachRestoredRoutes = () => {
 
   if (hasAttentionRoutes) {
     const { createAttentionScoreRouter } = require("./backend/routes/attentionScoreRoutes");
-    app.use("/api/attention-score", createAttentionScoreRouter({ authenticateToken }));
+    if (!hasPublicAttentionScoreRoutes) {
+      app.use("/api/attention-score", createAttentionScoreRouter({ authenticateToken }));
+    }
   }
 };
 
