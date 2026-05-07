@@ -220,6 +220,32 @@ router.get('/:adId/attention-score', (req, res) => {
   }
 });
 
+router.get('/:adId', (req, res) => {
+  try {
+    const { adId } = req.params;
+
+    if (!adId) {
+      return res.status(400).json({
+        success: false,
+        error: 'ad_id is required'
+      });
+    }
+
+    const score = attentionScoreService.getAttentionScore(adId);
+
+    return res.json({
+      success: true,
+      ...score
+    });
+  } catch (error) {
+    console.error('Error getting attention score (alias):', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
 /**
  * POST /api/ads/attention-scores/batch
  * 
