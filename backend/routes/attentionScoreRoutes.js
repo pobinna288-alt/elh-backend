@@ -49,6 +49,13 @@ function validateRequired(fields) {
 function createAttentionScoreRouter({ authenticateToken }) {
   const router = express.Router();
 
+  router.get('/health-check', (_req, res) => {
+    return res.json({
+      success: true,
+      message: 'attention-score route is alive'
+    });
+  });
+
 // ============================================
 // EVENT TRACKING ENDPOINTS
 // ============================================
