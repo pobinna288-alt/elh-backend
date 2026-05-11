@@ -36,6 +36,12 @@ const createAuthSecurityStore = () => {
       updatedAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS referral_codes (
+      referralCode TEXT PRIMARY KEY,
+      userId TEXT NOT NULL UNIQUE,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS auth_otp_requests (
       id TEXT PRIMARY KEY,
       normalizedPhone TEXT NOT NULL,
@@ -55,6 +61,8 @@ const createAuthSecurityStore = () => {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_auth_users_normalizedPhone ON auth_users(normalizedPhone);
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_referral_codes_referralCode ON referral_codes(referralCode);
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_referral_codes_userId ON referral_codes(userId);
     CREATE INDEX IF NOT EXISTS idx_auth_otp_phone_device_created ON auth_otp_requests(normalizedPhone, deviceId, createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_otp_phone_created ON auth_otp_requests(normalizedPhone, createdAt DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_otp_ip_created ON auth_otp_requests(ipAddress, createdAt DESC);
@@ -83,6 +91,23 @@ const createAuthSecurityStore = () => {
         normalizedPhone = excluded.normalizedPhone,
         userJson = excluded.userJson,
         updatedAt = excluded.updatedAt
+    `),
+
+    findReferralCodeOwner: db.prepare(`
+      SELECT referralCode, userId
+      FROM referral_codes
+      WHERE referralCode = ?
+      LIMIT 1
+    `),
+    findReferralCodeByUserId: db.prepare(`
+      SELECT referralCode, userId
+      FROM referral_codes
+      WHERE userId = ?
+      LIMIT 1
+    `),
+    reserveReferralCode: db.prepare(`
+      INSERT OR IGNORE INTO referral_codes (referralCode, userId, createdAt)
+      VALUES (@referralCode, @userId, @createdAt)
     `),
     countRecentOtpRequests: db.prepare(`
       SELECT COUNT(*) AS total
@@ -295,6 +320,48 @@ const createAuthSecurityStore = () => {
         synced: result.changes > 0,
         changes: result.changes,
       };
+    },
+
+    getReferralCodeOwner(referralCode) {
+      if (!referralCode) {
+        return null;
+      }
+
+      const normalized = `${referralCode}`.trim().toUpperCase();
+      const row = statements.findReferralCodeOwner.get(normalized);
+      if (!row) {
+        return null;
+      }
+
+      return {
+        referralCode: row.referralCode,
+        userId: row.userId,
+      };
+    },
+
+    reserveReferralCode({ userId, referralCode, createdAt = Date.now() } = {}) {
+      if (!userId || !referralCode) {
+        return { reserved: false, conflict: false };
+      }
+
+      const normalized = `${referralCode}`.trim().toUpperCase();
+      const createdAtIso = toIsoTimestamp(createdAt);
+      const result = statements.reserveReferralCode.run({
+        referralCode: normalized,
+        userId,
+        createdAt: createdAtIso,
+      });
+
+      if (result.changes === 1) {
+        return { reserved: true, conflict: false };
+      }
+
+      const owner = statements.findReferralCodeOwner.get(normalized);
+      if (owner && owner.userId === userId) {
+        return { reserved: true, conflict: false };
+      }
+
+      return { reserved: false, conflict: true };
     },
     countRecentOtpRequests({ normalizedPhone = null, ipAddress = null, minutes = 60 } = {}) {
       const cutoff = toIsoTimestamp(Date.now() - minutes * 60 * 1000);

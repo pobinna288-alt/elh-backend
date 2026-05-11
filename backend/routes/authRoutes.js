@@ -466,9 +466,68 @@ const generateUniqueReferralCode = (seed, { reserve = false } = {}) => {
   return referralCode;
 };
 
+const generateReferralCode = (userId) => {
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `REF-${userId}-${random}`;
+};
+
 const commitUserRecord = (user, reservation = {}) => {
   const state = ensureUserConstraintState();
   syncUserPhoneFields(user);
+
+  if (!user.referral_code) {
+    const store = getAuthStore();
+    let attempts = 0;
+    let nextCode = generateReferralCode(user.id);
+
+    while (attempts < 25) {
+      const candidate = `${nextCode || ""}`.trim().toUpperCase();
+      if (!candidate) {
+        nextCode = generateReferralCode(user.id);
+        attempts += 1;
+        continue;
+      }
+
+      if (store?.enabled) {
+        const result = store.reserveReferralCode({ userId: user.id, referralCode: candidate, createdAt: user.createdAt });
+        if (result.reserved) {
+          user.referral_code = candidate;
+          user.referral_link = user.referral_link || buildReferralLink(candidate);
+          break;
+        }
+      } else {
+        const inMemoryConflict =
+          state.referralCodes.has(candidate) ||
+          state.reservedReferralCodes.has(candidate) ||
+          database.users.some((existingUser) => {
+            if (!existingUser || existingUser.id === user.id) {
+              return false;
+            }
+            return `${existingUser.referral_code || ""}`.trim().toUpperCase() === candidate;
+          });
+
+        if (!inMemoryConflict) {
+          user.referral_code = candidate;
+          user.referral_link = user.referral_link || buildReferralLink(candidate);
+          break;
+        }
+      }
+
+      nextCode = generateReferralCode(user.id);
+      attempts += 1;
+    }
+
+    if (!user.referral_code) {
+      const fallback = `${uuidv4()}`.replace(/-/g, "").slice(0, 10).toUpperCase();
+      user.referral_code = `REF-${fallback}`;
+      user.referral_link = user.referral_link || buildReferralLink(user.referral_code);
+
+      const storeFallback = getAuthStore();
+      if (storeFallback?.enabled) {
+        storeFallback.reserveReferralCode({ userId: user.id, referralCode: user.referral_code, createdAt: user.createdAt });
+      }
+    }
+  }
 
   const emailKey = reservation.emailKey || normalizeEmailKey(user.email);
   const phoneKey = reservation.phoneKey || normalizePhoneKey(
