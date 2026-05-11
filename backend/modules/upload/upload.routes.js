@@ -1,6 +1,13 @@
 const express = require("express");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const { createUploadService } = require("./upload.service");
 const { createUploadController } = require("./upload.controller");
+
+fs.mkdirSync(path.resolve(process.cwd(), "uploads"), { recursive: true });
+
+const upload = multer({ dest: "uploads/" });
 
 function createUploadRoutes(context) {
   const router = express.Router();
@@ -17,7 +24,28 @@ function createUploadRoutes(context) {
   ];
 
   router.post("/user/profile/picture", ...profilePictureRouteHandlers);
-  router.post("/upload", ...profilePictureRouteHandlers);
+  router.post("/upload", upload.single("file"), (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: "No file uploaded",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        file: req.file,
+      });
+    } catch (err) {
+      console.error("UPLOAD ERROR:", err);
+
+      return res.status(500).json({
+        success: false,
+        error: "Internal server error",
+      });
+    }
+  });
 
   router.post(
     "/api/user/upload-profile",
