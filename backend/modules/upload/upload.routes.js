@@ -26,17 +26,17 @@ function createUploadRoutes(context) {
     }),
   );
 
-  const hasUpload = Boolean(context && context.profilePictureUpload);
+  const profileUpload = context?.profilePictureUpload;
+  const hasProfileUpload =
+    profileUpload &&
+    typeof profileUpload.array === "function" &&
+    typeof context?.authenticateToken === "function";
 
-  if (
-    hasUpload &&
-    typeof context.authenticateToken === "function" &&
-    typeof context.profilePictureUpload.array === "function"
-  ) {
+  if (hasProfileUpload) {
     router.post(
       "/user/profile/picture",
       context.authenticateToken,
-      context.profilePictureUpload.array("file", 1),
+      (req, res, next) => profileUpload.array("file", 1)(req, res, next),
       controller.updateProfilePicture,
     );
   }
@@ -94,7 +94,18 @@ function createUploadRoutes(context) {
   router.post(
     ["/ads/create", "/api/ads/create"],
     context.authenticateToken,
-    context.mediaUpload.array("media", 10),
+    (req, res, next) => {
+      const mediaUpload = context?.mediaUpload;
+      const hasMediaUpload = Boolean(mediaUpload && typeof mediaUpload.array === "function");
+      if (!hasMediaUpload) {
+        return res.status(503).json({
+          success: false,
+          message: "Upload service not available",
+        });
+      }
+
+      return mediaUpload.array("media", 10)(req, res, next);
+    },
     context.validateAdCreateRequest,
     controller.createAd,
   );
