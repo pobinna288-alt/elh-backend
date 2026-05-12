@@ -26,23 +26,19 @@ function createUploadRoutes(context) {
     }),
   );
 
-  const profilePictureUpload =
-    context?.profilePictureUpload && typeof context.profilePictureUpload.fields === "function"
-      ? context.profilePictureUpload
-      : null;
+  const hasUpload = Boolean(context && context.profilePictureUpload);
 
-  if (profilePictureUpload && typeof context?.authenticateToken === "function") {
-    const profilePictureRouteHandlers = [
+  if (
+    hasUpload &&
+    typeof context.authenticateToken === "function" &&
+    typeof context.profilePictureUpload.array === "function"
+  ) {
+    router.post(
+      "/user/profile/picture",
       context.authenticateToken,
-      profilePictureUpload.fields([
-        { name: "profile_picture", maxCount: 1 },
-        { name: "image", maxCount: 1 },
-        { name: "file", maxCount: 1 },
-      ]),
+      context.profilePictureUpload.array("file", 1),
       controller.updateProfilePicture,
-    ];
-
-    router.post("/user/profile/picture", ...profilePictureRouteHandlers);
+    );
   }
   router.post(
     "/upload",
