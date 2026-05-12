@@ -1,18 +1,31 @@
 const express = require("express");
 const multer = require("multer");
+const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const { createUploadService } = require("./upload.service");
 const { createUploadController } = require("./upload.controller");
 
-fs.mkdirSync(path.resolve(process.cwd(), "uploads"), { recursive: true });
+const uploadDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: uploadDir });
 
 function createUploadRoutes(context) {
   const router = express.Router();
   const uploadService = createUploadService(context);
   const controller = createUploadController(uploadService);
+
+  router.use(
+    cors({
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      allowedHeaders: ["Content-Type"],
+    }),
+  );
+
   const profilePictureRouteHandlers = [
     context.authenticateToken,
     context.profilePictureUpload.fields([
@@ -24,28 +37,41 @@ function createUploadRoutes(context) {
   ];
 
   router.post("/user/profile/picture", ...profilePictureRouteHandlers);
-  router.post("/upload", upload.single("file"), (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
+  router.post(
+    "/upload",
+    upload.single("file"),
+    (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: "No file uploaded",
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          file: req.file,
+        });
+      } catch (err) {
+        console.error("UPLOAD ERROR:", err);
+
+        return res.status(500).json({
           success: false,
-          error: "No file uploaded",
+          message: "Upload failed",
         });
       }
-
-      return res.status(200).json({
-        success: true,
-        file: req.file,
-      });
-    } catch (err) {
+    },
+    (err, _req, res, _next) => {
       console.error("UPLOAD ERROR:", err);
-
-      return res.status(500).json({
+      const isMulterError = err instanceof multer.MulterError;
+      const status = isMulterError ? 400 : 500;
+      return res.status(status).json({
         success: false,
-        error: "Internal server error",
+        message: err?.message || "Upload failed",
       });
-    }
-  });
+    },
+  );
 
   router.post(
     "/api/user/upload-profile",
