@@ -13,6 +13,25 @@ if (!fs.existsSync(uploadDir)) {
 
 const upload = multer({ dest: uploadDir });
 
+function safePost(router, routePath, middlewares = [], handler) {
+  if (typeof routePath !== "string") {
+    console.warn("[Upload] Invalid route path:", routePath);
+    return;
+  }
+
+  const validMiddlewares = Array.isArray(middlewares)
+    ? middlewares.filter((fn) => typeof fn === "function")
+    : [];
+  const validHandler = typeof handler === "function";
+
+  if (!validHandler) {
+    console.warn(`[Upload] Skipping ${routePath} — handler missing`);
+    return;
+  }
+
+  router.post(routePath, ...validMiddlewares, handler);
+}
+
 function createUploadRoutes(context) {
   const router = express.Router();
   const uploadService = createUploadService(context);
@@ -27,23 +46,19 @@ function createUploadRoutes(context) {
   );
 
   const profileUpload = context?.profilePictureUpload;
-  const hasProfileUpload =
-    profileUpload &&
-    typeof profileUpload.array === "function" &&
-    typeof context?.authenticateToken === "function";
+  const auth = context?.authenticateToken;
+  const canUseProfileUpload = Boolean(profileUpload && typeof profileUpload.array === "function");
 
-  if (hasProfileUpload) {
-    router.post(
+  if (canUseProfileUpload && typeof auth === "function") {
+    safePost(
+      router,
       "/user/profile/picture",
-      context.authenticateToken,
-      (req, res, next) => profileUpload.array("file", 1)(req, res, next),
-      controller.updateProfilePicture,
+      [auth, (req, res, next) => profileUpload.array("file", 1)(req, res, next)],
+      controller?.updateProfilePicture,
     );
   }
-  router.post(
-    "/upload",
-    upload.single("file"),
-    (req, res) => {
+
+  safePost(router, "/upload", [upload.single("file")], (req, res) => {
       try {
         if (!req.file) {
           return res.status(400).json({
@@ -64,17 +79,18 @@ function createUploadRoutes(context) {
           message: "Upload failed",
         });
       }
-    },
-    (err, _req, res, _next) => {
-      console.error("UPLOAD ERROR:", err);
-      const isMulterError = err instanceof multer.MulterError;
-      const status = isMulterError ? 400 : 500;
-      return res.status(status).json({
+    });
+
+  router.use("/upload", (err, _req, res, next) => {
+    if (err) {
+      return res.status(400).json({
         success: false,
-        message: err?.message || "Upload failed",
+        message: err.message || "Upload error",
       });
-    },
-  );
+    }
+
+    return next();
+  });
 
   router.post(
     "/api/user/upload-profile",
@@ -91,12 +107,14 @@ function createUploadRoutes(context) {
     controller.uploadProfileImage,
   );
 
-  router.post(
-    ["/ads/create", "/api/ads/create"],
-    context.authenticateToken,
+  const mediaUpload = context?.mediaUpload;
+  const hasMediaUpload = Boolean(mediaUpload && typeof mediaUpload.array === "function");
+  const adAuth = context?.authenticateToken;
+  const validateAdCreateRequest = context?.validateAdCreateRequest;
+
+  const adMiddlewares = [
+    adAuth,
     (req, res, next) => {
-      const mediaUpload = context?.mediaUpload;
-      const hasMediaUpload = Boolean(mediaUpload && typeof mediaUpload.array === "function");
       if (!hasMediaUpload) {
         return res.status(503).json({
           success: false,
@@ -106,9 +124,11 @@ function createUploadRoutes(context) {
 
       return mediaUpload.array("media", 10)(req, res, next);
     },
-    context.validateAdCreateRequest,
-    controller.createAd,
-  );
+    validateAdCreateRequest,
+  ];
+
+  safePost(router, "/ads/create", adMiddlewares, controller?.createAd);
+  safePost(router, "/api/ads/create", adMiddlewares, controller?.createAd);
 
   return router;
 }
