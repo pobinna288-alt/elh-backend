@@ -30,6 +30,7 @@ const {
   createWorkspace
 } = require("../services/authService");
 const { getAuthSecurityStore } = require("../services/authSecurityStore");
+const { resolveAdminFlags } = require("../utils/adminRole");
 
 // ============================================
 // INITIALIZATION
@@ -106,6 +107,9 @@ const generateToken = (user, rememberMe = false) => {
   const payload = {
     userId: user.id,
     phoneNumber: user.phone_number || user.phoneNumber || null,
+    email: user.email || user.user_email || null,
+    plan: user.plan || "FREE",
+    ...resolveAdminFlags(user),
   };
 
   const expiresIn = rememberMe ? "30d" : "7d";
@@ -2858,6 +2862,53 @@ router.get("/terms/sections", (req, res) => {
  * POST /auth/logout
  * Logout user (invalidate remember token)
  */
+router.get("/me", (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const token = typeof authHeader === "string" ? authHeader.split(" ")[1] : null;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.id || decoded.userId || decoded.sub || null;
+    const email = decoded.email || null;
+
+    const persistedUser = Array.isArray(database?.users)
+      ? database.users.find((entry) => {
+          const entryId = String(entry?.id ?? "");
+          const decodedId = String(userId ?? "");
+          const entryEmail = String(entry?.email || entry?.user_email || "").trim().toLowerCase();
+          const decodedEmail = String(email || "").trim().toLowerCase();
+
+          return entryId === decodedId || entryEmail === decodedEmail;
+        })
+      : null;
+
+    const resolvedUser = persistedUser ? { ...decoded, ...persistedUser } : decoded;
+    const adminFlags = resolveAdminFlags(resolvedUser);
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: resolvedUser.id || resolvedUser.userId || userId,
+        email: resolvedUser.email || email,
+        role: resolvedUser.role || adminFlags.role,
+        is_admin: Boolean(resolvedUser.is_admin ?? adminFlags.is_admin),
+      },
+    });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
+  }
+});
+
 router.post("/logout", (req, res) => {
   try {
     ensureOtpCollections();

@@ -38,6 +38,7 @@ const { v4: uuidv4 } = require("uuid");
 
 const { getEmailOtpStore } = require("../services/emailOtpStore");
 const { sendOtpEmail, assertOtpEmailConfigured } = require("../services/emailService");
+const { resolveAdminFlags } = require("../utils/adminRole");
 
 const router = express.Router();
 
@@ -123,8 +124,16 @@ const verifyOtp = (candidate, storedHash) => {
 const issueJwt = (user) => {
   const secret = _jwtSecret || process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not configured");
+
+  const adminFlags = resolveAdminFlags(user);
+
   return jwt.sign(
-    { userId: user.id, email: user.email, plan: user.plan || "FREE" },
+    {
+      userId: user.id,
+      email: user.email,
+      plan: user.plan || "FREE",
+      ...adminFlags,
+    },
     secret,
     { expiresIn: "7d" }
   );
@@ -432,6 +441,8 @@ router.post("/verify-otp", async (req, res, next) => {
         email:     user.email,
         phone:     user.phone || null,
         plan:      user.plan  || "FREE",
+        role:      resolveAdminFlags(user).role,
+        is_admin:  resolveAdminFlags(user).is_admin,
         status:    user.status,
         createdAt: user.createdAt,
       },

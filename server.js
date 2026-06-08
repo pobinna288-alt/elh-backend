@@ -1,6 +1,7 @@
-﻿if (process.env.NODE_ENV !== "production") {
-  require("dotenv").config();
-}
+﻿const dotenvResult = require("dotenv").config({ path: "express-server/.env" });
+console.log("dotenv loaded:", dotenvResult.error ? `FAILED: ${dotenvResult.error.message}` : "OK");
+console.log("PAYSTACK:", !!process.env.PAYSTACK_SECRET_KEY);
+console.log("DEEPSEEK:", !!process.env.DEEPSEEK_API_KEY);
 
 const express = require("express");
 const cors = require("cors");
@@ -17,7 +18,7 @@ app.use(
     origin: "*"
   })
 );
-const PORT = Number(process.env.PORT) || 4010;
+const PORT = Number(process.env.PORT) || 3001;
 const PAYSTACK_INITIALIZE_URL = "https://api.paystack.co/transaction/initialize";
 const PAYSTACK_VERIFY_URL = "https://api.paystack.co/transaction/verify";
 
@@ -61,26 +62,21 @@ const COIN_TIERS = {
 
 const createAuthenticateToken = (jwtSecret) => {
   return (req, res, next) => {
-    const isPublicAttentionScoreGET =
-      req.method === "GET" &&
-      (
-        req.originalUrl.startsWith("/api/attention-score") ||
-        req.url.startsWith("/api/attention-score")
-      );
+    const publicPaths = new Set([
+      "/api/health",
+      "/api/ping",
+      "/api/search",
+      "/api/attention-score"
+    ]);
 
-    const isPublicSearchGET =
-      req.method === "GET" &&
-      (
-        req.originalUrl.startsWith("/api/search") ||
-        req.url.startsWith("/api/search")
-      );
+    const path = req.path.split("?")[0].replace(/\/$/, "");
 
-    if (isPublicAttentionScoreGET || isPublicSearchGET) {
+    // 🔓 Fully public routes (no auth needed at all)
+    if (req.method === "GET" && publicPaths.has(path)) {
       return next();
     }
 
     const authorizationHeader = req.headers.authorization || req.headers.Authorization;
-
     if (typeof authorizationHeader !== "string") {
       return res.status(401).json({
         success: false,
@@ -696,6 +692,14 @@ app.get("/api/payments/verify/:reference", async (req, res) => {
   }
 });
 
+// Public ping endpoint for frontend/backend connection testing
+app.get("/api/ping", (_req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "pong"
+  });
+});
+
 attachRestoredRoutes();
 
 app.use((_req, res) => {
@@ -718,6 +722,106 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
+// Server start logic with safety checks and optional auto-fallback to next ports
+const HOST = "0.0.0.0";
+const MAX_FALLBACK_ATTEMPTS = 5; // will try PORT .. PORT+4
+const AUTO_FALLBACK = true; // set to false to disable auto-switching
+
+console.log("🚀 Server starting...");
+console.log("PORT:", PORT);
+
+const startServer = async (startPort, maxAttempts = MAX_FALLBACK_ATTEMPTS, host = HOST) => {
+  let lastError = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const tryPort = startPort + attempt;
+
+    // Attempt to start server and wait for listening or error
+    const server = app.listen(tryPort, host);
+
+    // Wrap event handling in a promise
+    const result = await new Promise((resolve) => {
+      let settled = false;
+      const onListening = () => {
+        if (settled) return;
+        settled = true;
+        server.removeListener("error", onError);
+        resolve({ success: true, server, port: tryPort });
+      };
+
+      const onError = (err) => {
+        if (settled) return;
+        settled = true;
+        server.close?.();
+        resolve({ success: false, error: err, port: tryPort });
+      };
+
+      server.once("listening", onListening);
+      server.once("error", onError);
+    });
+
+    if (result.success) {
+      const s = result.server;
+      const p = result.port;
+      console.log(`Server running on http://${host}:${p}`);
+
+      // Attach runtime error handler for EADDRINUSE after startup
+      s.on("error", (err) => {
+        if (err && err.code === "EADDRINUSE") {
+          console.log("❌ Port is already in use. Stop other Node processes or change PORT.");
+          process.exit(1);
+        }
+        console.error("Server error:", err);
+      });
+
+      // Graceful shutdown handlers so nodemon restarts cleanly
+      const shutdown = (signal) => {
+        return async () => {
+          try {
+            console.log(`\nReceived ${signal}. Closing server...`);
+            await new Promise((resolveClose) => s.close(() => resolveClose()));
+            process.exit(0);
+          } catch (closeErr) {
+            console.error("Error during shutdown:", closeErr);
+            process.exit(1);
+          }
+        };
+      };
+
+      process.once("SIGINT", shutdown("SIGINT"));
+      process.once("SIGTERM", shutdown("SIGTERM"));
+      // nodemon uses SIGUSR2 for restart by default
+      process.once("SIGUSR2", async () => {
+        await new Promise((resolveClose) => s.close(() => resolveClose()));
+        process.kill(process.pid, "SIGUSR2");
+      });
+
+      return s;
+    }
+
+    lastError = result.error;
+
+    if (lastError && lastError.code === "EADDRINUSE") {
+      console.warn(`Port ${result.port} in use.`);
+      if (!AUTO_FALLBACK) {
+        console.log("PORT IN USE - try another port or stop existing process");
+        process.exit(1);
+      }
+      // otherwise continue to next port
+    } else if (lastError) {
+      console.error(`Failed to start on port ${result.port}:`, lastError);
+      // For non EADDRINUSE errors, stop retrying
+      break;
+    }
+  }
+
+  console.error("Failed to start server after trying multiple ports.");
+  if (lastError && lastError.code === "EADDRINUSE") {
+    console.log("PORT IN USE - try another port or stop existing process");
+  }
+  process.exit(1);
+};
+
+startServer(PORT).catch((err) => {
+  console.error("Unexpected error while starting server:", err);
+  process.exit(1);
 });
