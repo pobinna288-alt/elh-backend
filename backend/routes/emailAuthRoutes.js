@@ -120,7 +120,7 @@ const verifyOtp = (candidate, storedHash) => {
   }
 };
 
-/** Sign a JWT with { userId, email, plan } – no fallback secret allowed. */
+/** Sign a JWT with { id, userId, email, plan, role } – no fallback secret allowed. */
 const issueJwt = (user) => {
   const secret = _jwtSecret || process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not configured");
@@ -129,10 +129,12 @@ const issueJwt = (user) => {
 
   return jwt.sign(
     {
+      id: user.id || user._id,
       userId: user.id,
       email: user.email,
       plan: user.plan || "FREE",
-      ...adminFlags,
+      role: adminFlags.role,
+      is_admin: adminFlags.is_admin,
     },
     secret,
     { expiresIn: "7d" }

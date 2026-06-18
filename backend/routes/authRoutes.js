@@ -104,12 +104,16 @@ const initAuthRoutes = (db, jwtSecret, emailSvc = null) => {
  * Generate JWT token
  */
 const generateToken = (user, rememberMe = false) => {
+  const adminFlags = resolveAdminFlags(user);
+
   const payload = {
+    id: user.id || user._id,
     userId: user.id,
     phoneNumber: user.phone_number || user.phoneNumber || null,
     email: user.email || user.user_email || null,
     plan: user.plan || "FREE",
-    ...resolveAdminFlags(user),
+    role: adminFlags.role,
+    is_admin: adminFlags.is_admin,
   };
 
   const expiresIn = rememberMe ? "30d" : "7d";
@@ -1161,6 +1165,7 @@ const buildPhoneAuthProfile = (user) => {
   const trustScore = Number(user.trust_score ?? user.trustScore ?? 50);
   const coins = Number(user.coin_balance ?? user.coins ?? 0);
   const normalizedPhone = user.normalizedPhone || user.normalized_phone || user.phone_number || user.phoneNumber || user.phone || null;
+  const adminFlags = resolveAdminFlags(user);
 
   return {
     user_id: user.id,
@@ -1187,6 +1192,8 @@ const buildPhoneAuthProfile = (user) => {
     last_login: new Date(lastLogin).toISOString(),
     is_verified: Boolean(user.is_verified ?? user.isVerified ?? true),
     status: user.status || "active",
+    role: adminFlags.role,
+    is_admin: adminFlags.is_admin,
   };
 };
 
