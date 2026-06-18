@@ -225,6 +225,30 @@ try {
   });
 }
 
+// Mount admin routes at /api/admin
+try {
+  const createAdminRouter = require("./routes/admin");
+  const { createRequireAdmin } = require("./middleware/auth");
+  const { createGetAdminDashboardHandler } = require("./controllers/adminController");
+  const { createAdminDataSource } = require("./models/adminDataSource");
+
+  const jwtSecret = String(
+    process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET || process.env.PAYSTACK_SECRET_KEY || "dev-secret"
+  ).trim();
+
+  const requireAdmin = createRequireAdmin({ jwtSecret });
+  const dataSource = createAdminDataSource(runtimeStore);
+  const getDashboard = createGetAdminDashboardHandler(dataSource);
+  const adminRouter = createAdminRouter({ requireAdmin, getDashboard });
+
+  app.use("/api/admin", adminRouter);
+  console.log("Admin routes mounted at /api/admin");
+} catch (error) {
+  console.warn("Admin routes were not attached", {
+    message: error?.message || "unknown error"
+  });
+}
+
 console.log("PAYSTACK KEY LOADED:", !!process.env.PAYSTACK_SECRET_KEY);
 console.log("NODE ENV:", process.env.NODE_ENV);
 
