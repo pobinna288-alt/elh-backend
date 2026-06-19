@@ -8,6 +8,16 @@ const resolveAdminFlags = (user = {}) => {
   };
 };
 
+const normalizeUser = (user = {}) => {
+  const flags = resolveAdminFlags(user);
+  return {
+    ...user,
+    role: flags.role,
+    is_admin: flags.is_admin,
+  };
+};
+
 module.exports = {
   resolveAdminFlags,
+  normalizeUser,
 };

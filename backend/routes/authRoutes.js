@@ -30,7 +30,7 @@ const {
   createWorkspace
 } = require("../services/authService");
 const { getAuthSecurityStore } = require("../services/authSecurityStore");
-const { resolveAdminFlags } = require("../utils/adminRole");
+const { resolveAdminFlags, normalizeUser } = require("../utils/adminRole");
 
 // ============================================
 // INITIALIZATION
@@ -1946,13 +1946,14 @@ router.post("/verify-otp", async (req, res) => {
         })
       : null;
 
-    const token = generateToken(user, true);
+    const normalizedUser = normalizeUser(user);
+    const token = generateToken(normalizedUser, true);
 
     return res.status(200).json({
       success: true,
       message: isNewUser ? "OTP verified and account created successfully" : "OTP verified and login successful",
       token,
-      user: buildPhoneAuthProfile(user),
+      user: buildPhoneAuthProfile(normalizedUser),
       trusted_device: trustedDevice
         ? {
             enabled: true,
@@ -2086,13 +2087,14 @@ router.post("/device-login", (req, res) => {
     touchDailyActivity(user);
     applyTrustScoreDelta(user, 1, "trusted_device_auto_login");
 
-    const token = generateToken(user, true);
+    const normalizedUser = normalizeUser(user);
+    const token = generateToken(normalizedUser, true);
 
     return res.status(200).json({
       success: true,
       message: "Trusted device auto-login successful",
       token,
-      user: buildPhoneAuthProfile(user),
+      user: buildPhoneAuthProfile(normalizedUser),
       trusted_device: {
         enabled: true,
         device_id: normalizedDeviceId,

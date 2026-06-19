@@ -38,7 +38,7 @@ const { v4: uuidv4 } = require("uuid");
 
 const { getEmailOtpStore } = require("../services/emailOtpStore");
 const { sendOtpEmail, assertOtpEmailConfigured } = require("../services/emailService");
-const { resolveAdminFlags } = require("../utils/adminRole");
+const { resolveAdminFlags, normalizeUser } = require("../utils/adminRole");
 
 const router = express.Router();
 
@@ -432,21 +432,22 @@ router.post("/verify-otp", async (req, res, next) => {
     }
 
     // ── 10. Issue JWT ─────────────────────────────────────────────────────
-    const token = issueJwt(user);
+    const normalizedUser = normalizeUser(user);
+    const token = issueJwt(normalizedUser);
 
     return res.status(200).json({
       success: true,
       message: "OTP verified. Login successful.",
       token,
       user: {
-        id:        user.id,
-        email:     user.email,
-        phone:     user.phone || null,
-        plan:      user.plan  || "FREE",
-        role:      resolveAdminFlags(user).role,
-        is_admin:  resolveAdminFlags(user).is_admin,
-        status:    user.status,
-        createdAt: user.createdAt,
+        id:        normalizedUser.id,
+        email:     normalizedUser.email,
+        phone:     normalizedUser.phone || null,
+        plan:      normalizedUser.plan  || "FREE",
+        role:      normalizedUser.role,
+        is_admin:  normalizedUser.is_admin,
+        status:    normalizedUser.status,
+        createdAt: normalizedUser.createdAt,
       },
     });
   } catch (err) {
