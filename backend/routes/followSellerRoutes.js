@@ -20,6 +20,7 @@ const express = require('express');
 const router = express.Router();
 
 const followSellerService = require('../services/followSellerService');
+const { getAuthenticatedUserId } = require('../utils/authUser');
 
 // ============================================
 // MIDDLEWARE
@@ -47,23 +48,38 @@ function validateRequired(fields) {
  * In production, use proper JWT validation
  */
 function extractUser(req, res, next) {
-  // Get user from header or body (for demo purposes)
-  const userId = req.headers['x-user-id'] || req.body.user_id;
-  const userTrustScore = parseInt(req.headers['x-user-trust-score']) || req.body.user_trust_score || 50;
-  
-  if (!userId) {
+  const userId = getAuthenticatedUserId(req);
+  const userTrustScore = req.user?.trust_score || parseInt(req.headers['x-user-trust-score']) || req.body?.user_trust_score || 50;
+
+  console.log('FOLLOW AUTH USER:', req.user);
+  console.log('FOLLOW USER ID:', userId);
+
+  if (userId) {
+    req.user = {
+      ...req.user,
+      id: userId,
+      trust_score: userTrustScore
+    };
+    return next();
+  }
+
+  // Fallback to header or body (legacy / demo support)
+  const fallbackUserId = req.headers['x-user-id'] || req.body?.user_id;
+
+  if (!fallbackUserId) {
     return res.status(401).json({
       success: false,
       error: 'User ID required',
       code: 'UNAUTHORIZED'
     });
   }
-  
+
   req.user = {
-    id: userId,
+    ...req.user,
+    id: fallbackUserId,
     trust_score: userTrustScore
   };
-  
+
   next();
 }
 
@@ -101,6 +117,18 @@ router.post('/seller',
   validateRequired(['seller_id']),
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const {
         seller_id,
         seller_trust_score = 50,
@@ -109,7 +137,7 @@ router.post('/seller',
       } = req.body;
       
       const result = followSellerService.followSeller({
-        followerId: req.user.id,
+        followerId: userId,
         sellerId: seller_id,
         follower: req.user,
         seller: { id: seller_id, trust_score: seller_trust_score },
@@ -142,9 +170,21 @@ router.delete('/seller/:sellerId',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { sellerId } = req.params;
       
-      const result = followSellerService.unfollowSeller(req.user.id, sellerId);
+      const result = followSellerService.unfollowSeller(userId, sellerId);
       
       if (!result.success) {
         return res.status(400).json(result);
@@ -170,9 +210,21 @@ router.get('/check/:sellerId',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { sellerId } = req.params;
-      const isFollowing = followSellerService.isFollowing(req.user.id, sellerId);
-      const details = followSellerService.getFollowDetails(req.user.id, sellerId);
+      const isFollowing = followSellerService.isFollowing(userId, sellerId);
+      const details = followSellerService.getFollowDetails(userId, sellerId);
       
       res.json({
         success: true,
@@ -200,11 +252,23 @@ router.patch('/seller/:sellerId/preferences',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { sellerId } = req.params;
       const { notifications_enabled, auto_bookmark_new_ads } = req.body;
       
       const result = followSellerService.updateFollowPreferences(
-        req.user.id,
+        userId,
         sellerId,
         { notifications_enabled, auto_bookmark_new_ads }
       );
@@ -245,6 +309,18 @@ router.get('/feed',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const {
         limit = 20,
         offset = 0,
@@ -258,7 +334,7 @@ router.get('/feed',
       const database = req.app.get('database');
       const allAds = database?.ads || [];
       
-      const result = followSellerService.getFollowedFeed(req.user.id, allAds, {
+      const result = followSellerService.getFollowedFeed(userId, allAds, {
         limit: parseInt(limit),
         offset: parseInt(offset),
         sortBy: sort_by,
@@ -287,11 +363,23 @@ router.get('/feed/seller/:sellerId',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { sellerId } = req.params;
       const { limit = 20, offset = 0 } = req.query;
       
       // Check if following
-      if (!followSellerService.isFollowing(req.user.id, sellerId)) {
+      if (!followSellerService.isFollowing(userId, sellerId)) {
         return res.status(403).json({
           success: false,
           error: 'Not following this seller',
@@ -302,7 +390,7 @@ router.get('/feed/seller/:sellerId',
       const database = req.app.get('database');
       const allAds = database?.ads || [];
       
-      const result = followSellerService.getSellerFeed(req.user.id, sellerId, allAds, {
+      const result = followSellerService.getSellerFeed(userId, sellerId, allAds, {
         limit: parseInt(limit),
         offset: parseInt(offset)
       });
@@ -345,6 +433,18 @@ router.post('/engagement',
   validateRequired(['ad_id', 'seller_id', 'event_type']),
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const {
         ad_id,
         seller_id,
@@ -356,7 +456,7 @@ router.post('/engagement',
       
       const result = followSellerService.trackEngagement({
         adId: ad_id,
-        userId: req.user.id,
+        userId: userId,
         sellerId: seller_id,
         eventType: event_type,
         sessionId: session_id,
@@ -389,9 +489,21 @@ router.get('/engagement/stats/:sellerId',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { sellerId } = req.params;
       
-      const result = followSellerService.getEngagementStats(req.user.id, sellerId);
+      const result = followSellerService.getEngagementStats(userId, sellerId);
       
       if (!result.success) {
         return res.status(400).json(result);
@@ -449,10 +561,22 @@ router.post('/bookmark',
   validateRequired(['ad_id']),
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { ad_id, from_followed_seller = false } = req.body;
       
       const result = followSellerService.bookmarkAd(
-        req.user.id,
+        userId,
         ad_id,
         false,
         from_followed_seller
@@ -482,9 +606,21 @@ router.delete('/bookmark/:adId',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { adId } = req.params;
       
-      const result = followSellerService.removeBookmark(req.user.id, adId);
+      const result = followSellerService.removeBookmark(userId, adId);
       
       if (!result.success) {
         return res.status(400).json(result);
@@ -510,9 +646,21 @@ router.get('/bookmarks',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { only_auto = false, limit = 50, offset = 0 } = req.query;
       
-      const result = followSellerService.getBookmarks(req.user.id, {
+      const result = followSellerService.getBookmarks(userId, {
         onlyAuto: only_auto === 'true',
         limit: parseInt(limit),
         offset: parseInt(offset)
@@ -542,9 +690,21 @@ router.get('/following',
   extractUser,
   (req, res) => {
     try {
+      const userId = getAuthenticatedUserId(req);
+      console.log('FOLLOW AUTH USER:', req.user);
+      console.log('FOLLOW USER ID:', userId);
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID required',
+          code: 'UNAUTHORIZED'
+        });
+      }
+
       const { limit = 50, offset = 0 } = req.query;
       
-      const result = followSellerService.getFollowedSellers(req.user.id, parseInt(limit), parseInt(offset));
+      const result = followSellerService.getFollowedSellers(userId, parseInt(limit), parseInt(offset));
       
       res.json(result);
     } catch (error) {
