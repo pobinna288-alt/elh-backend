@@ -66,13 +66,23 @@ const createAuthenticateToken = (jwtSecret) => {
       "/api/health",
       "/api/ping",
       "/api/search",
-      "/api/attention-score"
+      "/api/attention-score",
+      "/api/follow/health"
     ]);
 
     const path = req.path.split("?")[0].replace(/\/$/, "");
 
+    const isPublicFollowPath = () => {
+      return (
+        path.startsWith("/api/follow/followers/") ||
+        (path.startsWith("/api/follow/seller/") && path.endsWith("/stats")) ||
+        (path.startsWith("/api/follow/ad/") && path.endsWith("/attention-score")) ||
+        path.startsWith("/api/follow/trust-log/")
+      );
+    };
+
     // 🔓 Fully public routes (no auth needed at all)
-    if (req.method === "GET" && publicPaths.has(path)) {
+    if (req.method === "GET" && (publicPaths.has(path) || isPublicFollowPath())) {
       return next();
     }
 
@@ -93,12 +103,17 @@ const createAuthenticateToken = (jwtSecret) => {
     }
 
     try {
-      const payload = jwt.verify(token, jwtSecret);
-      req.auth = payload;
+      const decoded = jwt.verify(token, jwtSecret);
+      req.auth = decoded;
       req.user = {
-        ...payload,
-        id: payload.id || payload.userId || payload.sub || null
+        ...decoded,
+        id: decoded.id || decoded.userId || decoded.sub || null
       };
+      req.userId = decoded.userId || decoded.id || null;
+
+      console.log("JWT DECODED:", decoded);
+      console.log("REQ USER ID:", req.userId);
+
       return next();
     } catch (_error) {
       return res.status(401).json({

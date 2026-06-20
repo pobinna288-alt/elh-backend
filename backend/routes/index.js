@@ -38,7 +38,7 @@ function registerAppRoutes(app, dependencies = {}) {
   app.use("/api/search", searchRoutes);
   app.use("/api/trust", trustScoreRoutes);
   app.use("/api/ads", createAttentionScoreRouter({ authenticateToken: context.authenticateToken }));
-  app.use("/api/follow", followSellerRoutes);
+  app.use("/api/follow", context.authenticateToken, followSellerRoutes);
 
   const enterpriseChatRoutes = initEnterpriseChatRoutes({
     db: context.database,
