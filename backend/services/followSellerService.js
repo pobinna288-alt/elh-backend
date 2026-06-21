@@ -71,19 +71,21 @@ const NEW_AD_THRESHOLD_HOURS = 24;
 const VERY_NEW_AD_THRESHOLD_HOURS = 1;
 
 // ============================================
-// IN-MEMORY STORAGE (Replace with PostgreSQL in production)
+// PERSISTENT STORAGE (SQLite via followService)
 // ============================================
 
-const followers = new Map();          // key: 'follower_id:seller_id', value: follower object
-const sellerStats = new Map();        // key: seller_id, value: stats object
-const engagementEvents = new Map();   // key: 'ad_id:user_id:event_type:date', value: event
-const trustScoreLog = [];             // Array of trust score changes
-const adBookmarks = new Map();        // key: 'user_id:ad_id', value: bookmark object
+const {
+  followers,
+  sellerStats,
+  engagementEvents,
+  trustScoreLog,
+  adBookmarks,
+} = require("./followService");
 
-let followIdCounter = 1;
-let engagementIdCounter = 1;
-let trustLogIdCounter = 1;
-let bookmarkIdCounter = 1;
+let followIdCounter = Date.now();
+let engagementIdCounter = Date.now() + 1;
+let trustLogIdCounter = Date.now() + 2;
+let bookmarkIdCounter = Date.now() + 3;
 
 // ============================================
 // UTILITY FUNCTIONS
@@ -141,8 +143,9 @@ function isNewAd(adCreatedAt, thresholdHours = NEW_AD_THRESHOLD_HOURS) {
  * Get or create seller stats
  */
 function getOrCreateSellerStats(sellerId) {
-  if (!sellerStats.has(sellerId)) {
-    sellerStats.set(sellerId, {
+  let stats = sellerStats.get(sellerId);
+  if (!stats) {
+    stats = {
       seller_id: sellerId,
       follower_count: 0,
       high_trust_follower_count: 0,
@@ -152,9 +155,10 @@ function getOrCreateSellerStats(sellerId) {
       trust_boost_cap_reached: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    });
+    };
+    sellerStats.set(sellerId, stats);
   }
-  return sellerStats.get(sellerId);
+  return stats;
 }
 
 // ============================================
@@ -189,11 +193,6 @@ function logTrustScoreChange({
   
   trustScoreLog.push(logEntry);
   
-  // Keep only last 10000 entries in memory
-  if (trustScoreLog.length > 10000) {
-    trustScoreLog.splice(0, trustScoreLog.length - 10000);
-  }
-  
   console.log(`[Trust Log] User ${userId}: ${previousScore} → ${newScore} (${changeAmount >= 0 ? '+' : ''}${changeAmount}) [${sourceType}] - ${reason}`);
   
   return logEntry;
@@ -203,10 +202,7 @@ function logTrustScoreChange({
  * Get trust score history for a user
  */
 function getTrustScoreHistory(userId, limit = 50) {
-  return trustScoreLog
-    .filter(log => log.user_id === userId)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .slice(0, limit);
+  return trustScoreLog.getByUser(userId, limit);
 }
 
 // ============================================
@@ -321,6 +317,7 @@ function followSeller({
   // Update seller stats
   stats.follower_count++;
   stats.updated_at = new Date().toISOString();
+  sellerStats.set(sellerId, stats);
   
   console.log(`[Follow] User ${followerId} followed seller ${sellerId}. Trust boost: ${trustBoostAmount}`);
   
@@ -378,6 +375,7 @@ function unfollowSeller(followerId, sellerId) {
   }
   
   stats.updated_at = new Date().toISOString();
+  sellerStats.set(sellerId, stats);
   
   // Remove follow record
   followers.delete(key);
@@ -437,11 +435,10 @@ function getFollowedFeed(userId, allAds, options = {}) {
   const followedSellerIds = new Set();
   const followData = new Map();
   
-  for (const [key, follow] of followers.entries()) {
-    if (follow.follower_id === userId) {
-      followedSellerIds.add(follow.seller_id);
-      followData.set(follow.seller_id, follow);
-    }
+  const userFollows = followers.getByFollower(userId);
+  for (const follow of userFollows) {
+    followedSellerIds.add(follow.seller_id);
+    followData.set(follow.seller_id, follow);
   }
   
   if (followedSellerIds.size === 0) {
@@ -606,6 +603,7 @@ function trackEngagement({
     }
     
     follow.updated_at = new Date().toISOString();
+    followers.set(followKey, follow);
   }
   
   // Update seller stats
@@ -616,6 +614,7 @@ function trackEngagement({
       stats.total_follower_engagements / stats.follower_count;
   }
   stats.updated_at = new Date().toISOString();
+  sellerStats.set(sellerId, stats);
   
   console.log(`[Engagement] User ${userId} - ${eventType} on ad ${adId} from seller ${sellerId}`);
   
@@ -658,10 +657,9 @@ function getEngagementStats(userId, sellerId) {
     share: 0
   };
   
-  for (const [key, event] of engagementEvents.entries()) {
-    if (event.user_id === userId && 
-        event.seller_id === sellerId &&
-        event.event_date >= oneWeekAgoStr) {
+  const recentEvents = engagementEvents.getByUserAndSellerSince(userId, sellerId, oneWeekAgoStr);
+  for (const event of recentEvents) {
+    if (weeklyStats[event.event_type] !== undefined) {
       weeklyStats[event.event_type]++;
     }
   }
@@ -700,11 +698,12 @@ function calculateAttentionScore(adId) {
   // Count unique users per event type (not daily events)
   const uniqueUserEvents = new Map();
   
-  for (const [key, event] of engagementEvents.entries()) {
-    if (event.ad_id === adId) {
-      const userEventKey = `${event.user_id}:${event.event_type}`;
-      if (!uniqueUserEvents.has(userEventKey)) {
-        uniqueUserEvents.set(userEventKey, event);
+  const adEvents = engagementEvents.getByAdId(adId);
+  for (const event of adEvents) {
+    const userEventKey = `${event.user_id}:${event.event_type}`;
+    if (!uniqueUserEvents.has(userEventKey)) {
+      uniqueUserEvents.set(userEventKey, event);
+      if (eventCounts[event.event_type] !== undefined) {
         eventCounts[event.event_type]++;
       }
     }
@@ -790,13 +789,10 @@ function removeBookmark(userId, adId) {
 function getBookmarks(userId, options = {}) {
   const { onlyAuto = false, limit = 50, offset = 0 } = options;
   
-  let bookmarks = [];
+  let bookmarks = adBookmarks.getByUser(userId);
   
-  for (const [key, bookmark] of adBookmarks.entries()) {
-    if (bookmark.user_id === userId) {
-      if (onlyAuto && !bookmark.auto_bookmarked) continue;
-      bookmarks.push(bookmark);
-    }
+  if (onlyAuto) {
+    bookmarks = bookmarks.filter(b => b.auto_bookmarked);
   }
   
   // Sort by created_at desc
@@ -839,19 +835,14 @@ function autoBookmarkNewAds(userId, newAd) {
  * Get list of sellers a user follows
  */
 function getFollowedSellers(userId, limit = 50, offset = 0) {
-  const followedSellers = [];
-  
-  for (const [key, follow] of followers.entries()) {
-    if (follow.follower_id === userId) {
-      followedSellers.push({
-        seller_id: follow.seller_id,
-        followed_at: follow.created_at,
-        engagement_streak: follow.engagement_streak,
-        total_interactions: follow.total_interactions,
-        notifications_enabled: follow.notifications_enabled
-      });
-    }
-  }
+  const userFollows = followers.getByFollower(userId);
+  const followedSellers = userFollows.map(follow => ({
+    seller_id: follow.seller_id,
+    followed_at: follow.created_at,
+    engagement_streak: follow.engagement_streak,
+    total_interactions: follow.total_interactions,
+    notifications_enabled: follow.notifications_enabled
+  }));
   
   // Sort by followed_at desc
   followedSellers.sort((a, b) => new Date(b.followed_at) - new Date(a.followed_at));
@@ -875,14 +866,8 @@ function getFollowedSellers(userId, limit = 50, offset = 0) {
  * Get all seller IDs a user follows
  */
 function getFollowedSellerIds(userId) {
-  const sellerIds = [];
-
-  for (const follow of followers.values()) {
-    if (follow.follower_id === userId) {
-      sellerIds.push(follow.seller_id);
-    }
-  }
-
+  const userFollows = followers.getByFollower(userId);
+  const sellerIds = userFollows.map(f => f.seller_id);
   return Array.from(new Set(sellerIds));
 }
 
@@ -924,19 +909,14 @@ function countNewAdsFromFollowedSellers(userId, allAds = [], lastSeenTime = null
  * Get list of followers for a seller
  */
 function getSellerFollowers(sellerId, limit = 50, offset = 0) {
-  const sellerFollowers = [];
-  
-  for (const [key, follow] of followers.entries()) {
-    if (follow.seller_id === sellerId) {
-      sellerFollowers.push({
-        follower_id: follow.follower_id,
-        followed_at: follow.created_at,
-        trust_boost_applied: follow.trust_boost_applied,
-        trust_boost_amount: follow.trust_boost_amount,
-        engagement_streak: follow.engagement_streak
-      });
-    }
-  }
+  const sellerFollowRecords = followers.getBySeller(sellerId);
+  const sellerFollowers = sellerFollowRecords.map(follow => ({
+    follower_id: follow.follower_id,
+    followed_at: follow.created_at,
+    trust_boost_applied: follow.trust_boost_applied,
+    trust_boost_amount: follow.trust_boost_amount,
+    engagement_streak: follow.engagement_streak
+  }));
   
   // Sort by followed_at desc
   sellerFollowers.sort((a, b) => new Date(b.followed_at) - new Date(a.followed_at));
@@ -1001,6 +981,7 @@ function updateFollowPreferences(followerId, sellerId, preferences) {
   }
   
   follow.updated_at = new Date().toISOString();
+  followers.set(key, follow);
   
   return {
     success: true,

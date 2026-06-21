@@ -35,12 +35,11 @@ const VALID_EVENT_TYPES = Object.values(EVENT_TYPES);
 const DEVICE_TYPES = ['mobile', 'tablet', 'desktop'];
 
 // ============================================
-// IN-MEMORY STORE (Replace with real DB)
+// PERSISTENT STORAGE (SQLite via attentionService)
 // ============================================
 
-const attentionEvents = new Map(); // Map<eventKey, event>
-const attentionScores = new Map(); // Map<adId, scoreData>
-const sessionEventTracker = new Map(); // Map<sessionKey, Set<eventType>>
+const { attentionEvents, sessionEventTracker } = require("./attentionService");
+const attentionScores = new Map(); // Computed cache (rebuilt from events)
 
 /**
  * Generate unique key for event deduplication
@@ -157,15 +156,7 @@ function checkSpamPrevention(eventData) {
  * Check if user has viewed ad in a different session
  */
 function checkUserHasPreviousView(adId, userId, currentSessionId) {
-  for (const [key, event] of attentionEvents) {
-    if (event.ad_id === adId && 
-        event.user_id === userId && 
-        event.session_id !== currentSessionId &&
-        event.event_type === EVENT_TYPES.AD_SEEN) {
-      return true;
-    }
-  }
-  return false;
+  return attentionEvents.hasPreviousView(adId, userId, currentSessionId);
 }
 
 // ============================================
@@ -216,10 +207,7 @@ function logAttentionEvent(eventData) {
 
   // Update session tracker
   const sessionKey = getSessionEventKey(eventData.ad_id, eventData.user_id, eventData.session_id);
-  if (!sessionEventTracker.has(sessionKey)) {
-    sessionEventTracker.set(sessionKey, new Set());
-  }
-  sessionEventTracker.get(sessionKey).add(eventData.event_type);
+  sessionEventTracker.addEvent(sessionKey, eventData.event_type);
 
   // Update attention score for the ad
   updateAttentionScore(eventData.ad_id);
@@ -264,25 +252,24 @@ function updateAttentionScore(adId) {
   let uniqueUsers = new Set();
   let totalViewportTime = 0;
 
-  for (const event of attentionEvents.values()) {
-    if (event.ad_id === adId) {
-      uniqueUsers.add(event.user_id);
-      
-      if (event.viewport_time_ms) {
-        totalViewportTime += event.viewport_time_ms;
-      }
+  const adEvents = attentionEvents.getByAd(adId);
+  for (const event of adEvents) {
+    uniqueUsers.add(event.user_id);
+    
+    if (event.viewport_time_ms) {
+      totalViewportTime += event.viewport_time_ms;
+    }
 
-      switch (event.event_type) {
-        case EVENT_TYPES.AD_SEEN:
-          seenCount++;
-          break;
-        case EVENT_TYPES.SCROLL_STOP:
-          scrollStopCount++;
-          break;
-        case EVENT_TYPES.REPEATED_VIEW:
-          repeatedViewCount++;
-          break;
-      }
+    switch (event.event_type) {
+      case EVENT_TYPES.AD_SEEN:
+        seenCount++;
+        break;
+      case EVENT_TYPES.SCROLL_STOP:
+        scrollStopCount++;
+        break;
+      case EVENT_TYPES.REPEATED_VIEW:
+        repeatedViewCount++;
+        break;
     }
   }
 
@@ -364,15 +351,17 @@ function getTopAdsByAttention(limit = 20) {
 function getAdAttentionEvents(adId, options = {}) {
   const { limit = 100, eventType = null, userId = null } = options;
 
-  let events = Array.from(attentionEvents.values())
-    .filter(e => e.ad_id === adId);
-
-  if (eventType) {
-    events = events.filter(e => e.event_type === eventType);
+  let events;
+  if (userId) {
+    events = attentionEvents.getByAdAndUser(adId, userId);
+  } else if (eventType) {
+    events = attentionEvents.getByAdAndType(adId, eventType);
+  } else {
+    events = attentionEvents.getByAd(adId);
   }
 
-  if (userId) {
-    events = events.filter(e => e.user_id === userId);
+  if (eventType && userId) {
+    events = events.filter(e => e.event_type === eventType);
   }
 
   return events

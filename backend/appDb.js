@@ -130,6 +130,128 @@ db.exec(`
     id   TEXT PRIMARY KEY,
     data TEXT NOT NULL DEFAULT '{}'
   );
+
+  -- ══════════════════════════════════════════════════════════════════════════
+  -- PHASE 2: Follow / Engagement / Bookmarks
+  -- ══════════════════════════════════════════════════════════════════════════
+
+  -- ── Followers ─────────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS followers (
+    key          TEXT PRIMARY KEY,
+    follower_id  TEXT NOT NULL,
+    seller_id    TEXT NOT NULL,
+    data         TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_followers_follower ON followers(follower_id);
+  CREATE INDEX IF NOT EXISTS idx_followers_seller   ON followers(seller_id);
+
+  -- ── Seller Stats ──────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS seller_stats (
+    seller_id TEXT PRIMARY KEY,
+    data      TEXT NOT NULL DEFAULT '{}'
+  );
+
+  -- ── Engagement Events ─────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS engagement_events (
+    key        TEXT PRIMARY KEY,
+    ad_id      TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    seller_id  TEXT,
+    event_type TEXT NOT NULL,
+    event_date TEXT,
+    data       TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_engagement_ad      ON engagement_events(ad_id);
+  CREATE INDEX IF NOT EXISTS idx_engagement_user    ON engagement_events(user_id);
+  CREATE INDEX IF NOT EXISTS idx_engagement_seller  ON engagement_events(seller_id);
+
+  -- ── Trust Score Log ───────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS trust_score_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    data       TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_trust_log_user ON trust_score_log(user_id, created_at DESC);
+
+  -- ── Ad Bookmarks ──────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS ad_bookmarks (
+    key     TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    ad_id   TEXT NOT NULL,
+    data    TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON ad_bookmarks(user_id);
+  CREATE INDEX IF NOT EXISTS idx_bookmarks_ad   ON ad_bookmarks(ad_id);
+
+  -- ══════════════════════════════════════════════════════════════════════════
+  -- PHASE 3: Attention Score / Coin Rewards
+  -- ══════════════════════════════════════════════════════════════════════════
+
+  -- ── Attention Events ──────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS attention_events (
+    id         TEXT PRIMARY KEY,
+    ad_id      TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    session_id TEXT,
+    event_type TEXT NOT NULL,
+    data       TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_attn_events_ad      ON attention_events(ad_id);
+  CREATE INDEX IF NOT EXISTS idx_attn_events_user    ON attention_events(user_id);
+  CREATE INDEX IF NOT EXISTS idx_attn_events_session ON attention_events(session_id);
+
+  -- ── Session Event Tracker ─────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS session_event_tracker (
+    session_key TEXT PRIMARY KEY,
+    events      TEXT NOT NULL DEFAULT '[]'
+  );
+
+  -- ── Published Ads (Coin System) ───────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS published_ads (
+    ad_id   TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    data    TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_published_ads_user ON published_ads(user_id);
+
+  -- ── Viewer Ad Rewards ─────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS viewer_ad_rewards (
+    key       TEXT PRIMARY KEY,
+    viewer_id TEXT NOT NULL,
+    ad_id     TEXT NOT NULL,
+    data      TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_viewer_rewards_viewer ON viewer_ad_rewards(viewer_id);
+
+  -- ── Daily Coin Earnings ───────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS daily_coin_earnings (
+    key     TEXT PRIMARY KEY,
+    viewer_id TEXT NOT NULL,
+    date    TEXT NOT NULL,
+    total   INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_daily_coins_viewer ON daily_coin_earnings(viewer_id);
+
+  -- ── Watch Sessions ────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS watch_sessions (
+    session_id TEXT PRIMARY KEY,
+    viewer_id  TEXT NOT NULL,
+    ad_id      TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'active',
+    data       TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_watch_sessions_viewer ON watch_sessions(viewer_id);
+  CREATE INDEX IF NOT EXISTS idx_watch_sessions_ad     ON watch_sessions(ad_id);
+
+  -- ── Pending Videos ────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS pending_videos (
+    video_id TEXT PRIMARY KEY,
+    user_id  TEXT NOT NULL,
+    status   TEXT NOT NULL DEFAULT 'pending',
+    data     TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_pending_videos_user ON pending_videos(user_id);
 `);
 
 module.exports = db;

@@ -25,37 +25,15 @@ const {
   DEFAULT_PLAN
 } = require('../config/subscriptionPlans');
 
-// ─── In-Memory Storage (Production: Use Redis/Database) ────────────────────
+// ─── Persistent Storage (SQLite via rewardService) ───────────────────────────
 
-/**
- * Published ads with their calculated coin rewards
- * Key: ad_id, Value: ad object
- */
-const publishedAds = new Map();
-
-/**
- * Track which viewers have earned coins from which ads
- * Key: `${viewer_id}:${ad_id}`, Value: { earned_at, coins }
- */
-const viewerAdRewards = new Map();
-
-/**
- * Daily coin earnings per viewer
- * Key: `${viewer_id}:${date}`, Value: total coins earned that day
- */
-const dailyCoinEarnings = new Map();
-
-/**
- * Active watch sessions
- * Key: session_id, Value: session object
- */
-const watchSessions = new Map();
-
-/**
- * Uploaded videos pending publication
- * Key: video_id, Value: video metadata
- */
-const pendingVideos = new Map();
+const {
+  publishedAds,
+  viewerAdRewards,
+  dailyCoinEarnings,
+  watchSessions,
+  pendingVideos,
+} = require("./rewardService");
 
 
 // ─── Coin Calculation Functions ────────────────────────────────────────────
