@@ -42,8 +42,11 @@ const createRuntimeStore = () => ({
   enterprise_messages: []
 });
 
-const runtimeStore = createRuntimeStore();
-app.set("database", runtimeStore);
+// ── Persistent Storage (SQLite-backed, drop-in replacement) ──────────────────
+const { createPersistentStore } = require("./backend/storageService");
+const persistentStore = createPersistentStore();
+app.set("database", persistentStore);
+console.log("[DB] SQLite persistent store initialized (data/app.db)");
 
 const users = [
   {
@@ -154,7 +157,7 @@ const attachRestoredRoutes = () => {
 
     registerAppRoutes(app, {
       app,
-      database: runtimeStore,
+      database: persistentStore,
       jwtSecret,
       authenticateToken,
       axios
@@ -252,7 +255,7 @@ try {
   ).trim();
 
   const requireAdmin = createRequireAdmin({ jwtSecret });
-  const dataSource = createAdminDataSource(runtimeStore);
+  const dataSource = createAdminDataSource(persistentStore);
   const getDashboard = createGetAdminDashboardHandler(dataSource);
   const adminRouter = createAdminRouter({ requireAdmin, getDashboard });
 
