@@ -17,7 +17,15 @@ const { initEnterpriseChatRoutes } = require("./enterpriseChatRoutes");
 const messageRoutes = require("./messageRoutes");
 
 function registerAppRoutes(app, dependencies = {}) {
-  const context = createModuleContext({ ...dependencies, app });
+  const db = dependencies.database;
+
+  // Persist ad to SQLite via the storageService proxy
+  const storeAdRecord = (ad) => {
+    if (!ad || !ad.id) return;
+    db.ads.push(ad);
+  };
+
+  const context = createModuleContext({ ...dependencies, app, storeAdRecord });
 
   registerAuthModule(app, context);
   try {

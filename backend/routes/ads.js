@@ -1,9 +1,36 @@
 const express = require("express");
+const jwt = require("jsonwebtoken");
 const router = express.Router();
 
+// ─── Auth Middleware ─────────────────────────────────────────────────────────
+
+function requireAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const token = authHeader?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = {
+      ...decoded,
+      id: decoded.id || decoded.userId || decoded.sub || null
+    };
+    next();
+  } catch (err) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+}
+
+// ─── Database reference (set by initAdsRoutes) ──────────────────────────────
+
+let database = null;
+
 /**
- * MVP Ads Database (in-memory)
- * This does NOT affect any existing backend logic
+ * MVP Ads Database (in-memory demo data)
+ * Real user-created ads are stored in SQLite via database.ads
  */
 const adsDB = [
   // TECH
@@ -47,14 +74,20 @@ const handleFetchAds = (req, res) => {
   try {
     const { category } = req.query;
 
+    // Merge demo ads with real user-created ads from SQLite
+    const realAds = (database && Array.isArray(database.ads))
+      ? database.ads.filter((ad) => ad.status === "active" || ad.isActive === true)
+      : [];
+    const allAds = [...realAds, ...adsDB];
+
     // No category → return all ads
     if (!category) {
-      return res.json(adsDB);
+      return res.json(allAds);
     }
 
     // Filter by category (safe normalization)
-    const filteredAds = adsDB.filter(ad =>
-      String(ad.category).toLowerCase() === String(category).toLowerCase()
+    const filteredAds = allAds.filter(ad =>
+      String(ad.category || "").toLowerCase() === String(category).toLowerCase()
     );
 
     return res.json(filteredAds);
@@ -66,6 +99,93 @@ const handleFetchAds = (req, res) => {
 
 router.get("/feed", handleFetchAds);
 router.get("/", handleFetchAds);
+
+/**
+ * GET /api/ads/mine
+ * Returns the authenticated user's own posts (post history)
+ */
+router.get("/mine", requireAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (!database || !Array.isArray(database.ads)) {
+      return res.json({ success: true, ads: [], total: 0 });
+    }
+
+    const userAds = database.ads
+      .filter((ad) => ad.userId === userId || ad.seller_id === userId || ad.user_id === userId)
+      .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
+
+    return res.json({
+      success: true,
+      ads: userAds,
+      total: userAds.length,
+    });
+  } catch (err) {
+    console.error("My ads fetch error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+/**
+ * GET /api/ads/user/:userId
+ * Returns a user's public posts (visible to anyone)
+ */
+router.get("/user/:userId", (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!database || !Array.isArray(database.ads)) {
+      return res.json({ success: true, ads: [], total: 0 });
+    }
+
+    const userAds = database.ads
+      .filter((ad) => {
+        const isOwner = ad.userId === userId || ad.seller_id === userId || ad.user_id === userId;
+        const isActive = ad.status === "active" || ad.isActive === true;
+        return isOwner && isActive;
+      })
+      .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
+
+    return res.json({
+      success: true,
+      ads: userAds,
+      total: userAds.length,
+    });
+  } catch (err) {
+    console.error("User ads fetch error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+/**
+ * GET /api/ads/:adId
+ * Returns a single ad by ID
+ */
+router.get("/:adId", (req, res) => {
+  try {
+    const { adId } = req.params;
+
+    // Check SQLite first
+    if (database && Array.isArray(database.ads)) {
+      const ad = database.ads.find((a) => a.id === adId || String(a.id) === adId);
+      if (ad) {
+        return res.json({ success: true, ad });
+      }
+    }
+
+    // Fallback to demo data
+    const demoAd = adsDB.find((a) => String(a.id) === String(adId));
+    if (demoAd) {
+      return res.json({ success: true, ad: demoAd });
+    }
+
+    return res.status(404).json({ success: false, error: "Ad not found" });
+  } catch (err) {
+    console.error("Ad fetch error:", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 // POST /api/ads/track
 router.post("/track", (req, res) => {
@@ -103,4 +223,10 @@ router.post("/track", (req, res) => {
   }
 });
 
+function initAdsRoutes(db) {
+  database = db;
+  return router;
+}
+
 module.exports = router;
+module.exports.initAdsRoutes = initAdsRoutes;

@@ -236,6 +236,9 @@ app.use((req, res, next) => {
 
 try {
   const adsRoute = require("./backend/routes/ads");
+  if (typeof adsRoute.initAdsRoutes === "function") {
+    adsRoute.initAdsRoutes(persistentStore);
+  }
   app.use("/api/ads", adsRoute);
 } catch (error) {
   console.warn("Ads route was not attached", {
