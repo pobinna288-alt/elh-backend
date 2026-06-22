@@ -32,6 +32,8 @@ const CONTACT_WINDOW_MS = 10 * 60 * 1000;
 const CONTACT_MAX_REQUESTS = 3;
 const contactAttemptStore = new Map();
 
+let collectionsInitialized = false;
+
 const ensureEnterpriseCollections = () => {
   if (!database) {
     return;
@@ -49,13 +51,18 @@ const ensureEnterpriseCollections = () => {
     database.enterpriseMessages = [];
   }
 
-  database.enterpriseLeads = database.enterpriseLeads.map((lead) => normalizeLeadBudgetContext(lead));
+  // Normalize existing data only once (avoids full rewrite on every request)
+  if (!collectionsInitialized) {
+    database.enterpriseLeads = database.enterpriseLeads.map((lead) => normalizeLeadBudgetContext(lead));
 
-  const leadLookup = new Map(database.enterpriseLeads.map((lead) => [lead.id, lead]));
-  database.enterpriseChats = database.enterpriseChats.map((chat) => {
-    const lead = leadLookup.get(chat.enterprise_lead_id);
-    return normalizeChatTier(chat, lead);
-  });
+    const leadLookup = new Map(database.enterpriseLeads.map((lead) => [lead.id, lead]));
+    database.enterpriseChats = database.enterpriseChats.map((chat) => {
+      const lead = leadLookup.get(chat.enterprise_lead_id);
+      return normalizeChatTier(chat, lead);
+    });
+
+    collectionsInitialized = true;
+  }
 };
 
 const requireAuth = (req, res, next) => {

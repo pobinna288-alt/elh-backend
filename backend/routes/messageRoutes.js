@@ -1,7 +1,30 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
+const jwt = require("jsonwebtoken");
 const router = express.Router();
 const db = require("../db");
+
+// ─── Auth Middleware (security patch) ─────────────────────────────────────────
+
+function requireAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const token = authHeader?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = {
+      ...decoded,
+      id: decoded.id || decoded.userId || decoded.sub || null
+    };
+    next();
+  } catch (err) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+}
 
 // Prepared statements for performance
 const insertMessage = db.prepare(
@@ -35,12 +58,17 @@ const getConversationsByUser = db.prepare(
 /**
  * SEND MESSAGE
  */
-router.post("/send", (req, res) => {
+router.post("/send", requireAuth, (req, res) => {
   try {
     const { chatId, sender, text, receiverId } = req.body;
 
     if (!chatId || !sender || !text) {
       return res.status(400).json({ error: "Missing fields" });
+    }
+
+    // Security: sender must match authenticated user
+    if (sender !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Unauthorized" });
     }
 
     // Auto-create conversation if it doesn't exist
@@ -79,9 +107,14 @@ router.post("/send", (req, res) => {
  * GET CONVERSATIONS for a user
  * Must be defined BEFORE /:chatId to avoid "conversations" matching as a chatId
  */
-router.get("/conversations/:userId", (req, res) => {
+router.get("/conversations/:userId", requireAuth, (req, res) => {
   try {
     const { userId } = req.params;
+
+    // Security: can only fetch own conversations
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, error: "Unauthorized" });
+    }
 
     const rows = getConversationsByUser.all(userId, userId);
 
@@ -99,9 +132,15 @@ router.get("/conversations/:userId", (req, res) => {
 /**
  * GET MESSAGES
  */
-router.get("/:chatId", (req, res) => {
+router.get("/:chatId", requireAuth, (req, res) => {
   try {
     const { chatId } = req.params;
+
+    // Security: verify user is a participant in this conversation
+    const conversation = findConversation.get(chatId);
+    if (conversation && conversation.user1 !== req.user.id && conversation.user2 !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Unauthorized" });
+    }
 
     const rows = getMessagesByConversation.all(chatId);
 
