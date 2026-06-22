@@ -1,15 +1,75 @@
 const { v4: uuidv4 } = require("uuid");
 
-function createReferralService({
-  database,
-  ensureUserProfileDefaults,
-  buildReferralSnapshot,
-  getUtcDayDifference,
-  createNotifications,
-  invalidateProfileCache,
-  acquireLock,
-  releaseLock,
-}) {
+// ─── Built-in fallback helpers (used when context doesn't supply them) ───────
+
+const _locks = new Set();
+const _defaultAcquireLock = (id) => { if (_locks.has(id)) return false; _locks.add(id); return true; };
+const _defaultReleaseLock = (id) => { _locks.delete(id); };
+
+const _defaultGetUtcDayDifference = (dateA, dateB) => {
+  const a = new Date(dateA); const b = new Date(dateB);
+  return Math.floor(Math.abs(b - a) / (1000 * 60 * 60 * 24));
+};
+
+const _defaultBuildReferralSnapshot = (user) => {
+  const referralCode = user.referral_code || null;
+  return {
+    referral_code: referralCode,
+    referral_link: referralCode ? `https://elhannora.com/ref/${referralCode}` : null,
+    referred_by: user.referred_by || null,
+    total_referrals: user.total_referrals || 0,
+    referral_coins_earned: user.referral_coins_earned || 0,
+    referral_reward_status: user.referral_reward_status || null,
+    referral_pending_reward: user.referral_pending_reward || 0,
+  };
+};
+
+const _defaultEnsureUserProfileDefaults = (user) => {
+  if (user.referral_code == null) user.referral_code = uuidv4().slice(0, 8).toUpperCase();
+  if (user.total_referrals == null) user.total_referrals = 0;
+  if (user.referral_coins_earned == null) user.referral_coins_earned = 0;
+  if (user.coin_balance == null) user.coin_balance = user.coins || 0;
+};
+
+// ─── Service factory ─────────────────────────────────────────────────────────
+
+function createReferralService(context = {}) {
+  const {
+    database,
+    ensureUserProfileDefaults = _defaultEnsureUserProfileDefaults,
+    buildReferralSnapshot     = _defaultBuildReferralSnapshot,
+    getUtcDayDifference       = _defaultGetUtcDayDifference,
+    createNotifications,
+    invalidateProfileCache,
+    acquireLock               = _defaultAcquireLock,
+    releaseLock               = _defaultReleaseLock,
+  } = context;
+
+  // Safe notification helper — works whether context provides it or not
+  const pushNotification = (...items) => {
+    if (typeof createNotifications === "function") {
+      createNotifications(...items);
+      return;
+    }
+    // Fallback: push directly to database.notifications
+    for (const item of items) {
+      if (item && database && Array.isArray(database.notifications)) {
+        database.notifications.push({
+          id: uuidv4(),
+          ...item,
+          read: false,
+          createdAt: item.createdAt || new Date(),
+        });
+      }
+    }
+  };
+
+  const invalidateCache = (userId) => {
+    if (typeof invalidateProfileCache === "function") {
+      invalidateProfileCache(userId);
+    }
+  };
+
   const wouldCreateReferralCycle = ({ refereeId, referrerId }) => {
     if (!refereeId || !referrerId) {
       return false;
@@ -192,7 +252,7 @@ function createReferralService({
           createdAt: now,
         });
 
-        createNotifications(
+        pushNotification(
           {
             userId: referrer.id,
             type: "referral",
@@ -219,8 +279,8 @@ function createReferralService({
           },
         );
 
-        invalidateProfileCache(referrer.id);
-        invalidateProfileCache(referee.id);
+        invalidateCache(referrer.id);
+        invalidateCache(referee.id);
 
         return {
           status: 200,

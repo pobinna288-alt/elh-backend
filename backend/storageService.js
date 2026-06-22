@@ -47,6 +47,7 @@ const TABLE_CONFIG = {
   authBlocks:           { table: "auth_blocks",         idField: "id",    indexCols: {} },
   deviceFingerprints:   { table: "device_fingerprints", idField: "id",    indexCols: {} },
   authFraudSignals:     { table: "auth_fraud_signals",  idField: "id",    indexCols: {} },
+  referrals:            { table: "referrals",           idField: "id",    indexCols: { referrer_id: "referrer_id", referee_id: "referee_id" } },
 };
 
 // ─── CamelCase → snake_case aliases (enterprise chat routes use camelCase) ───

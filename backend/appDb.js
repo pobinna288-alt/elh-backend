@@ -139,6 +139,16 @@ db.exec(`
     data TEXT NOT NULL DEFAULT '{}'
   );
 
+  -- ── Referrals ────────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS referrals (
+    id   TEXT PRIMARY KEY,
+    referrer_id TEXT,
+    referee_id TEXT,
+    data TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+  CREATE INDEX IF NOT EXISTS idx_referrals_referee  ON referrals(referee_id);
+
   -- ══════════════════════════════════════════════════════════════════════════
   -- PHASE 2: Follow / Engagement / Bookmarks
   -- ══════════════════════════════════════════════════════════════════════════
