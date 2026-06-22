@@ -7,8 +7,21 @@ function createReferralRoutes(context) {
   const referralService = createReferralService(context);
   const controller = createReferralController(referralService);
 
-  router.get("/:id", context.authenticateToken, controller.getReferral);
-  router.post("/apply", context.authenticateToken, controller.applyReferral);
+  // Safe auth guard — never blocks silently or crashes
+  const safeAuth = (req, res, next) => {
+    try {
+      if (typeof context.authenticateToken !== "function") {
+        return res.status(401).json({ success: false, error: "Auth not configured" });
+      }
+      return context.authenticateToken(req, res, next);
+    } catch (err) {
+      console.error("[Referral] Auth middleware error:", err);
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+  };
+
+  router.get("/:id", safeAuth, controller.getReferral);
+  router.post("/apply", safeAuth, controller.applyReferral);
 
   return router;
 }

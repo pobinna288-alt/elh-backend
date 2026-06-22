@@ -4,8 +4,23 @@ function createReferralController(referralService) {
   return {
     getReferral: (req, res) => {
       try {
-        const requesterId = req.user?.id;
         const requestedUserId = req.params.id;
+
+        if (!requestedUserId) {
+          return res.status(400).json({
+            success: false,
+            error: "Missing userId",
+          });
+        }
+
+        if (!req.user || !req.user.id) {
+          return res.status(401).json({
+            success: false,
+            error: "Unauthorized",
+          });
+        }
+
+        const requesterId = req.user.id;
         const canView = requesterId === requestedUserId || isAdminUser(req.currentUser || req.user);
 
         if (!canView) {
@@ -28,6 +43,13 @@ function createReferralController(referralService) {
 
     applyReferral: (req, res) => {
       try {
+        if (!req.user || !req.user.id) {
+          return res.status(401).json({
+            success: false,
+            error: "Unauthorized",
+          });
+        }
+
         const requestedCode = `${req.body?.referral_code || req.body?.code || ""}`.trim().toUpperCase();
         const result = referralService.applyReferralCode({
           currentUserId: req.user.id,
