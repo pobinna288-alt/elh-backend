@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require("uuid");
+const { getBaseUrl } = require("../../common/envConfig");
 
 // ─── Built-in fallback helpers (used when context doesn't supply them) ───────
 
@@ -15,7 +16,7 @@ const _defaultBuildReferralSnapshot = (user) => {
   const referralCode = user.referral_code || null;
   return {
     referral_code: referralCode,
-    referral_link: referralCode ? `https://elhannora.com/ref/${referralCode}` : null,
+    referral_link: referralCode ? `${getBaseUrl()}/ref/${referralCode}` : null,
     referred_by: user.referred_by || null,
     total_referrals: user.total_referrals || 0,
     referral_coins_earned: user.referral_coins_earned || 0,

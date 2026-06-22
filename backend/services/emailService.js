@@ -9,6 +9,8 @@
  * - Nodemailer with SMTP
  */
 
+const { getBaseUrl } = require("../common/envConfig");
+
 // ============================================
 // CONFIGURATION
 // ============================================
@@ -16,7 +18,7 @@
 const EMAIL_CONFIG = {
   from: process.env.EMAIL_FROM || "noreply@elhannora.com",
   fromName: process.env.EMAIL_FROM_NAME || "El Hannora",
-  frontendUrl: process.env.BASE_URL || process.env.FRONTEND_URL || ""
+  get frontendUrl() { return getBaseUrl(); }
 };
 
 const resendApiKey = String(process.env.RESEND_API_KEY || "").trim();

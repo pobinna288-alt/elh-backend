@@ -8,6 +8,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
+const { getBaseUrl } = require("../common/envConfig");
 const router = express.Router();
 
 const {
@@ -675,8 +676,7 @@ const commitUserRecord = (user, reservation = {}) => {
 };
 
 const buildReferralLink = (referralCode) => {
-  const baseUrl = (process.env.BASE_URL || process.env.FRONTEND_URL || "").replace(/\/+$/, "");
-  return `${baseUrl}/register?ref=${encodeURIComponent(referralCode)}`;
+  return `${getBaseUrl()}/register?ref=${encodeURIComponent(referralCode)}`;
 };
 
 const touchDailyActivity = (user) => {
@@ -2606,7 +2606,7 @@ router.post("/forgot-password", async (req, res) => {
       }
       
       // Generate reset link
-      const resetBaseUrl = `${process.env.BASE_URL || process.env.FRONTEND_URL || ""}`.replace(/\/+$/, "");
+      const resetBaseUrl = getBaseUrl();
       const resetLink = `${resetBaseUrl}/reset-password?token=${plainToken}&email=${encodeURIComponent(email)}`;
       
       // Send email (if email service is configured)

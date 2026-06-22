@@ -8,6 +8,7 @@ const cors = require("cors");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const { randomUUID } = require("crypto");
+const { getClientOrigin, isProduction } = require("./backend/common/envConfig");
 
 const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
@@ -15,7 +16,8 @@ const generatePaymentReference = () =>
 const app = express();
 app.use(
   cors({
-    origin: "*"
+    origin: getClientOrigin(),
+    credentials: true
   })
 );
 const PORT = Number(process.env.PORT) || 3001;
@@ -214,7 +216,7 @@ const attachRestoredRoutes = () => {
   }
 };
 
-app.use(cors());
+app.use(cors({ origin: getClientOrigin(), credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -222,9 +224,10 @@ const notificationsRoute = require("./routes/notifications");
 app.use("/notifications", notificationsRoute);
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  const allowedOrigin = getClientOrigin();
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 
   // Handle pre-flight requests
   if (req.method === "OPTIONS") {
@@ -807,7 +810,8 @@ const startServer = async (startPort, maxAttempts = MAX_FALLBACK_ATTEMPTS, host 
     if (result.success) {
       const s = result.server;
       const p = result.port;
-      console.log(`Server running on http://${host}:${p}`);
+      const displayHost = isProduction() ? "(production)" : `http://${host}:${p}`;
+      console.log(`Server running on ${displayHost}`);
 
       // Attach runtime error handler for EADDRINUSE after startup
       s.on("error", (err) => {
