@@ -33,10 +33,21 @@ function registerAppRoutes(app, dependencies = {}) {
   } catch (uploadError) {
     console.warn("[Routes] Upload module failed to register — skipping:", uploadError.message);
   }
-  registerSubscriptionModule(app, context);
-  registerPaymentModule(app, context);
-  registerCoinModule(app, context);
-  registerReferralModule(app, context);
+  try { registerSubscriptionModule(app, context); } catch (e) {
+    console.warn("[Routes] Subscription module failed to register:", e.message);
+  }
+  try { registerPaymentModule(app, context); } catch (e) {
+    console.warn("[Routes] Payment module failed to register:", e.message);
+  }
+  try { registerCoinModule(app, context); } catch (e) {
+    console.warn("[Routes] Coin module failed to register:", e.message);
+  }
+  try {
+    registerReferralModule(app, context);
+    console.log("[Routes] Referral module registered at /user/referral");
+  } catch (referralError) {
+    console.error("[Routes] Referral module failed to register:", referralError.message);
+  }
 
   app.use("/ads", adTargetingRoutes);
   registerAiModule(app, context);
