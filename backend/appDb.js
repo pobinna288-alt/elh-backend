@@ -75,6 +75,14 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
+  -- ── Enterprise Leads ──────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS enterprise_leads (
+    id   TEXT PRIMARY KEY,
+    user_id TEXT,
+    data TEXT NOT NULL DEFAULT '{}'
+  );
+  CREATE INDEX IF NOT EXISTS idx_enterprise_leads_user ON enterprise_leads(user_id);
+
   -- ── Enterprise Chats ──────────────────────────────────────────────────────
   CREATE TABLE IF NOT EXISTS enterprise_chats (
     id   TEXT PRIMARY KEY,

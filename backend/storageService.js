@@ -38,6 +38,7 @@ const TABLE_CONFIG = {
   transactions:         { table: "transactions",        idField: "id",    indexCols: { user_id: "user_id" } },
   workspaces:           { table: "workspaces",          idField: "id",    indexCols: {} },
   notifications:        { table: "notifications",       idField: "id",    indexCols: { user_id: "user_id" } },
+  enterprise_leads:    { table: "enterprise_leads",    idField: "id",    indexCols: { user_id: "user_id" } },
   enterprise_chats:     { table: "enterprise_chats",    idField: "id",    indexCols: { user_id: "user_id" } },
   enterprise_messages:  { table: "enterprise_messages",  idField: "id",    indexCols: { chat_id: "chat_id" } },
   tokenBlacklist:       { table: "token_blacklist",     idField: "token", indexCols: { user_id: "user_id" } },
@@ -46,6 +47,14 @@ const TABLE_CONFIG = {
   authBlocks:           { table: "auth_blocks",         idField: "id",    indexCols: {} },
   deviceFingerprints:   { table: "device_fingerprints", idField: "id",    indexCols: {} },
   authFraudSignals:     { table: "auth_fraud_signals",  idField: "id",    indexCols: {} },
+};
+
+// ─── CamelCase → snake_case aliases (enterprise chat routes use camelCase) ───
+
+const ALIAS_MAP = {
+  enterpriseLeads:    "enterprise_leads",
+  enterpriseChats:    "enterprise_chats",
+  enterpriseMessages: "enterprise_messages",
 };
 
 // ─── Prepared statement cache ────────────────────────────────────────────────
@@ -264,36 +273,39 @@ function createPersistentStore() {
 
   return new Proxy(collections, {
     get(target, prop) {
-      // Return existing collection
-      if (prop in target) return target[prop];
+      // Resolve camelCase alias to snake_case collection
+      const resolved = ALIAS_MAP[prop] || prop;
+      if (resolved in target) return target[resolved];
 
-      // Dynamic collections (e.g. enterpriseLeads added at runtime)
       // Fall back to regular property access
       return target[prop];
     },
 
     set(target, prop, value) {
+      // Resolve camelCase alias
+      const resolved = ALIAS_MAP[prop] || prop;
+
       // Handle full-array reassignment:  database.users = filteredArray
-      if (prop in TABLE_CONFIG && Array.isArray(value)) {
-        const s = getStmts(prop);
+      if (resolved in TABLE_CONFIG && Array.isArray(value)) {
+        const s = getStmts(resolved);
         if (s) {
           // Wrap in transaction for atomicity
           const replaceAll = db.transaction(() => {
             s.deleteAll.run();
             for (const item of value) {
-              upsertRow(prop, item);
+              upsertRow(resolved, item);
             }
           });
           replaceAll();
 
           // Rebuild proxy
-          target[prop] = createCollectionProxy(prop);
+          target[resolved] = createCollectionProxy(resolved);
           return true;
         }
       }
 
       // For unknown properties or non-array assignments, just set normally
-      target[prop] = value;
+      target[resolved] = value;
       return true;
     },
   });
