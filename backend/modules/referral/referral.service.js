@@ -96,8 +96,21 @@ function createReferralService(context = {}) {
   };
 
   return {
-    getReferralSnapshotByUserId(userId) {
-      const user = database.users.find((entry) => entry.id === userId);
+    getReferralSnapshotByUserId(userId, authUser) {
+      let user = database.users.find((entry) => entry.id === userId);
+
+      // Auto-provision: authenticated user exists in JWT but not in database
+      if (!user && authUser && authUser.id === userId) {
+        user = {
+          id: userId,
+          email: authUser.email || null,
+          plan: authUser.plan || "FREE",
+          createdAt: new Date().toISOString(),
+        };
+        ensureUserProfileDefaults(user);
+        database.users.push(user);
+      }
+
       if (!user) {
         return {
           status: 404,

@@ -30,7 +30,7 @@ function createReferralController(referralService) {
           });
         }
 
-        const result = referralService.getReferralSnapshotByUserId(requestedUserId);
+        const result = referralService.getReferralSnapshotByUserId(requestedUserId, req.user);
         return res.status(result.status).json(result.body);
       } catch (error) {
         console.error("Referral fetch error:", error);
