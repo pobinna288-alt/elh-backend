@@ -1,6 +1,6 @@
 // ─── Centralized environment URL configuration ──────────────────────────────
 // All URL generation should use these helpers instead of hardcoding domains.
-// Defaults fall back to the production domain so deployments never leak localhost.
+// Defaults fall back to the production domain so deployments never leak internal URLs.
 
 const PRODUCTION_DOMAIN = "https://elhannora.com";
 const PRODUCTION_API    = "https://api.elhannora.com";
