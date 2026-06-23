@@ -14,10 +14,22 @@ const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
 
 const app = express();
+const _configuredOrigin = getClientOrigin();
 app.use(
   cors({
-    origin: getClientOrigin(),
-    credentials: true
+    origin: (requestOrigin, callback) => {
+      // No origin (same-origin, curl, Postman) — allow
+      if (!requestOrigin) return callback(null, true);
+      // Specific CLIENT_URL configured — only allow that
+      if (_configuredOrigin !== "*") {
+        return callback(null, requestOrigin === _configuredOrigin ? requestOrigin : false);
+      }
+      // Wildcard mode — reflect the request origin so credentials work
+      return callback(null, requestOrigin);
+    },
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   })
 );
 const PORT = Number(process.env.PORT) || 3001;
@@ -216,7 +228,7 @@ const attachRestoredRoutes = () => {
   }
 };
 
-app.use(cors({ origin: getClientOrigin(), credentials: true }));
+app.use(cors({ origin: (o, cb) => cb(null, o || true), credentials: true, allowedHeaders: ["Content-Type", "Authorization"], methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"] }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -224,28 +236,9 @@ const notificationsRoute = require("./routes/notifications");
 app.use("/notifications", notificationsRoute);
 
 app.use((req, res, next) => {
-  const allowedOrigin = getClientOrigin();
-  const requestOrigin = req.headers.origin;
-
-  if (allowedOrigin === "*") {
-    // Wildcard mode — credentials not allowed with * so omit credentials header
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  } else if (requestOrigin && requestOrigin === allowedOrigin) {
-    // Specific origin match — safe to allow credentials
-    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  } else if (requestOrigin) {
-    // Allow any origin in dev but reflect the request origin
-    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-  }
-
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }
-
   next();
 });
 
