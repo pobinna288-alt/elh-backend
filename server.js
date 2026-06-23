@@ -225,11 +225,23 @@ app.use("/notifications", notificationsRoute);
 
 app.use((req, res, next) => {
   const allowedOrigin = getClientOrigin();
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  const requestOrigin = req.headers.origin;
+
+  if (allowedOrigin === "*") {
+    // Wildcard mode — credentials not allowed with * so omit credentials header
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  } else if (requestOrigin && requestOrigin === allowedOrigin) {
+    // Specific origin match — safe to allow credentials
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  } else if (requestOrigin) {
+    // Allow any origin in dev but reflect the request origin
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+  }
+
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 
-  // Handle pre-flight requests
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
   }

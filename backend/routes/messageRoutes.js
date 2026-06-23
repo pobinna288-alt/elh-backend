@@ -6,6 +6,14 @@ const db = require("../db");
 
 // ─── Auth Middleware (security patch) ─────────────────────────────────────────
 
+const _getJwtSecret = () =>
+  String(
+    process.env.JWT_SECRET ||
+    process.env.AUTH_JWT_SECRET ||
+    process.env.PAYSTACK_SECRET_KEY ||
+    "dev-secret"
+  ).trim();
+
 function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -15,7 +23,7 @@ function requireAuth(req, res, next) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, _getJwtSecret());
     req.user = {
       ...decoded,
       id: decoded.id || decoded.userId || decoded.sub || null
