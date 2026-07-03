@@ -711,7 +711,10 @@ async function handleGuardian(req, res, aiService) {
   }
 }
 
-const uploadMemory = multer({ storage: multer.memoryStorage() });
+const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: 1 },
+});
 
 function resolveOthersCategory() {
   return AD_CATEGORIES.find((category) => category.name === "Others") || { id: 11, name: "Others" };
@@ -730,7 +733,7 @@ function buildFileMetadata(file) {
 async function handleSuggestCategory(req, res) {
   try {
     const description = String(req.body?.description || "").trim();
-    const file = req.file;
+    const file = req.files?.[0] || req.file;
 
     const suggestedName = await suggestCategory({
       description,
@@ -867,7 +870,7 @@ function createAiAliasRouter(routes, context = {}) {
     "/ai/suggest-category",
     requireAuth,
     attachResolvedPlan,
-    uploadMemory.single("file"),
+    uploadMemory.any(),
     handleSuggestCategory,
   );
 
