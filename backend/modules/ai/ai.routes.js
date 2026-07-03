@@ -18,6 +18,9 @@ const { resolveBudgetContext } = require("../../config/enterpriseBudgetConfig");
 const { createAiUsageGuard } = require("../../middleware/aiUsageGuardMiddleware");
 const { createAiService } = require("./ai.service");
 const { createAiController } = require("./ai.controller");
+const multer = require("multer");
+const { suggestCategory } = require("../../services/deepseekCategoryService");
+const { findAdCategory, AD_CATEGORIES } = require("../../config/adCategories");
 
 const AI_LATEST_MODEL = process.env.AI_LATEST_MODEL || "deepseek-chat";
 const AI_DEFAULT_MODEL = process.env.AI_DEFAULT_MODEL || "deepseek-chat";
@@ -708,6 +711,52 @@ async function handleGuardian(req, res, aiService) {
   }
 }
 
+const uploadMemory = multer({ storage: multer.memoryStorage() });
+
+function resolveOthersCategory() {
+  return AD_CATEGORIES.find((category) => category.name === "Others") || { id: 11, name: "Others" };
+}
+
+function buildFileMetadata(file) {
+  if (!file) return [];
+  return [
+    {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    },
+  ];
+}
+
+async function handleSuggestCategory(req, res) {
+  try {
+    const description = String(req.body?.description || "").trim();
+    const file = req.file;
+
+    const suggestedName = await suggestCategory({
+      description,
+      mediaMetadata: buildFileMetadata(file),
+    });
+
+    const matchedCategory = suggestedName ? findAdCategory(suggestedName) : null;
+    const finalCategory = matchedCategory || resolveOthersCategory();
+
+    return res.json({
+      success: true,
+      category: finalCategory.name,
+      category_id: finalCategory.id,
+    });
+  } catch (error) {
+    console.error("[AI Suggest Category] Error:", error?.message || error);
+
+    const fallback = resolveOthersCategory();
+    return res.json({
+      success: true,
+      category: fallback.name,
+      category_id: fallback.id,
+    });
+  }
+}
+
 function createAiRoutes() {
   const aiService = createAiService();
   const controller = createAiController(aiService);
@@ -812,6 +861,14 @@ function createAiAliasRouter(routes, context = {}) {
     requireFeatureHealthy("ad_guardian"),
     createAiUsageGuard({ feature: "guardian" }),
     (req, res) => handleGuardian(req, res, routes.aiService),
+  );
+
+  router.post(
+    "/ai/suggest-category",
+    requireAuth,
+    attachResolvedPlan,
+    uploadMemory.single("file"),
+    handleSuggestCategory,
   );
 
   return router;

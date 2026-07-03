@@ -13,6 +13,7 @@ function createAiService() {
       "/ai/ad-improvement",
       "/ai/demandpulse",
       "/ai/guardian",
+      "/ai/suggest-category",
       "/ai/auto-post",
     ],
   };
