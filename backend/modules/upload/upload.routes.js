@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const { createUploadService } = require("./upload.service");
 const { createUploadController } = require("./upload.controller");
+const { aiCategorySuggestion } = require("../../middleware/aiCategorySuggestion");
+const { validateAdCreateRequest } = require("../../middleware/adValidation");
 
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -110,7 +112,7 @@ function createUploadRoutes(context) {
   const mediaUpload = context?.mediaUpload;
   const hasMediaUpload = Boolean(mediaUpload && typeof mediaUpload.array === "function");
   const adAuth = context?.authenticateToken;
-  const validateAdCreateRequest = context?.validateAdCreateRequest;
+  const adValidation = context?.validateAdCreateRequest || validateAdCreateRequest;
 
   const adMiddlewares = [
     adAuth,
@@ -124,7 +126,8 @@ function createUploadRoutes(context) {
 
       return mediaUpload.array("media", 10)(req, res, next);
     },
-    validateAdCreateRequest,
+    aiCategorySuggestion,
+    adValidation,
   ];
 
   safePost(router, "/ads/create", adMiddlewares, controller?.createAd);
