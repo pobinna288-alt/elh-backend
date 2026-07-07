@@ -1194,6 +1194,10 @@ const buildPhoneAuthProfile = (user) => {
     status: user.status || "active",
     role: adminFlags.role,
     is_admin: adminFlags.is_admin,
+    daily_streak: Number(user.daily_streak || 0),
+    current_streak: Number(user.current_streak || 0),
+    streak_count: Number(user.streak_count || 0),
+    streakDays: Number(user.daily_streak || 0),
   };
 };
 
@@ -2908,6 +2912,10 @@ router.get("/me", (req, res) => {
         email: resolvedUser.email || email,
         role: resolvedUser.role || adminFlags.role,
         is_admin: Boolean(resolvedUser.is_admin ?? adminFlags.is_admin),
+        daily_streak: Number(resolvedUser.daily_streak || 0),
+        current_streak: Number(resolvedUser.current_streak || 0),
+        streak_count: Number(resolvedUser.streak_count || 0),
+        streakDays: Number(resolvedUser.daily_streak || 0),
       },
     });
   } catch (error) {
