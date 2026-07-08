@@ -1894,7 +1894,27 @@ router.post("/verify-otp", async (req, res) => {
     user.otp_auth_enabled = true;
     user.updatedAt = new Date();
 
+    console.log("Before streak update:", {
+      daily_streak: user.daily_streak,
+      current_streak: user.current_streak,
+      streak_count: user.streak_count
+    });
+
     touchDailyActivity(user);
+
+    console.log("After streak update:", {
+      daily_streak: user.daily_streak,
+      current_streak: user.current_streak,
+      streak_count: user.streak_count
+    });
+
+    console.log("Persisting user...");
+    const rawDb = require("../appDb");
+    const reloadStmt = rawDb.prepare("SELECT data FROM users WHERE id = ?");
+    const reloadedRow = reloadStmt.get(user.id);
+    const reloadedUser = reloadedRow ? JSON.parse(reloadedRow.data) : null;
+    console.log("Reloaded from database:", reloadedUser);
+
     applyTrustScoreDelta(user, isNewUser ? 0 : 2, "successful_phone_otp_login");
 
     if (otpRecord.ipAddress && otpRecord.ipAddress !== ipAddress) {
@@ -2904,6 +2924,18 @@ router.get("/me", (req, res) => {
 
     const resolvedUser = persistedUser ? { ...decoded, ...persistedUser } : decoded;
     const adminFlags = resolveAdminFlags(resolvedUser);
+
+    console.log("[DIAG] /auth/me - persistedUser found in app.db:", persistedUser !== null);
+    console.log("[DIAG] /auth/me - userId from JWT:", userId, "| email from JWT:", email);
+    if (!persistedUser) {
+      console.log("[DIAG] /auth/me - user NOT found in app.db (users table) — falling back to JWT payload only");
+      console.log("[DIAG] /auth/me - JWT payload has no streak fields, so all streaks will be 0");
+    }
+    console.log("[DIAG] /auth/me - resolvedUser streak values:", {
+      daily_streak:   resolvedUser.daily_streak   ?? "MISSING",
+      current_streak: resolvedUser.current_streak ?? "MISSING",
+      streak_count:   resolvedUser.streak_count   ?? "MISSING",
+    });
 
     return res.status(200).json({
       success: true,

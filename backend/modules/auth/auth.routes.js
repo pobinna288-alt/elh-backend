@@ -12,7 +12,7 @@ function createAuthRouters(context) {
   // Email OTP router – handles requests that carry an `email` body field.
   // Mounted BEFORE the phone OTP router so email-based requests are resolved
   // first; phone-only requests fall through via next().
-  const emailApiRouter = initEmailAuthRoutes(context.jwtSecret);
+  const emailApiRouter = initEmailAuthRoutes(context.jwtSecret, context.database);
 
   legacyRouter.post("/signup", controller.signup);
   legacyRouter.post("/login", controller.login);
