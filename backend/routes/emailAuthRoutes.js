@@ -438,51 +438,64 @@ router.post("/verify-otp", async (req, res, next) => {
     const token = issueJwt(normalizedUser);
 
     if (_database && Array.isArray(_database.users)) {
+      const userId    = String(normalizedUser.id);
+      const userEmail = String(normalizedUser.email || "").toLowerCase();
+
       const existingIdx = _database.users.findIndex(
-        (u) => String(u.id) === String(normalizedUser.id) ||
-               String(u.email || "").toLowerCase() === String(normalizedUser.email || "").toLowerCase()
+        (u) => String(u.id) === userId ||
+               String(u.email || "").toLowerCase() === userEmail
       );
 
       const now = new Date();
+
       if (existingIdx !== -1) {
-        const appUser = _database.users[existingIdx];
-        const previousDate = appUser.last_active_date ? new Date(appUser.last_active_date) : null;
+        const existing     = _database.users[existingIdx].__rawTarget || _database.users[existingIdx];
+        const previousDate = existing.last_active_date ? new Date(existing.last_active_date) : null;
+
+        let newStreak = Number(existing.daily_streak) || 0;
         if (!previousDate || Number.isNaN(previousDate.getTime())) {
-          appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0);
+          newStreak = Math.max(1, newStreak);
         } else {
           const prevUtc = Date.UTC(previousDate.getUTCFullYear(), previousDate.getUTCMonth(), previousDate.getUTCDate());
           const nowUtc  = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
           const diff    = Math.floor((nowUtc - prevUtc) / (24 * 60 * 60 * 1000));
-          if (diff >= 2)      appUser.daily_streak = 1;
-          else if (diff === 1) appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0) + 1;
-          else if (!(Number(appUser.daily_streak) > 0)) appUser.daily_streak = 1;
+          if      (diff >= 2)              newStreak = 1;
+          else if (diff === 1)             newStreak = Math.max(1, newStreak) + 1;
+          else if (!(newStreak > 0))       newStreak = 1;
         }
-        appUser.current_streak   = Math.max(Number(appUser.current_streak) || 0, Number(appUser.daily_streak) || 0);
-        appUser.streak_count     = Number(appUser.daily_streak) || 0;
-        appUser.last_active_date = now.toISOString();
-        appUser.email            = normalizedUser.email;
-        appUser.updatedAt        = now;
-        normalizedUser.daily_streak   = appUser.daily_streak;
-        normalizedUser.current_streak = appUser.current_streak;
-        normalizedUser.streak_count   = appUser.streak_count;
+
+        const updatedUser = {
+          ...existing,
+          daily_streak:    newStreak,
+          current_streak:  Math.max(Number(existing.current_streak) || 0, newStreak),
+          streak_count:    newStreak,
+          last_active_date: now.toISOString(),
+          updatedAt:       now,
+        };
+
+        _database.users[existingIdx] = updatedUser;
+
+        normalizedUser.daily_streak   = updatedUser.daily_streak;
+        normalizedUser.current_streak = updatedUser.current_streak;
+        normalizedUser.streak_count   = updatedUser.streak_count;
       } else {
         const newAppUser = {
-          id:             normalizedUser.id,
-          email:          normalizedUser.email,
-          phone:          normalizedUser.phone || null,
-          role:           normalizedUser.role  || "user",
-          is_admin:       normalizedUser.is_admin || false,
-          status:         normalizedUser.status || "active",
-          plan:           normalizedUser.plan   || "FREE",
-          daily_streak:   1,
-          current_streak: 1,
-          streak_count:   1,
+          id:              normalizedUser.id,
+          email:           normalizedUser.email,
+          phone:           normalizedUser.phone || null,
+          role:            normalizedUser.role  || "user",
+          is_admin:        normalizedUser.is_admin || false,
+          status:          normalizedUser.status || "active",
+          plan:            normalizedUser.plan   || "FREE",
+          daily_streak:    1,
+          current_streak:  1,
+          streak_count:    1,
           last_active_date: now.toISOString(),
-          coins:          0,
-          coin_balance:   0,
-          trust_score:    50,
-          createdAt:      normalizedUser.createdAt || now,
-          updatedAt:      now,
+          coins:           0,
+          coin_balance:    0,
+          trust_score:     50,
+          createdAt:       normalizedUser.createdAt || now,
+          updatedAt:       now,
         };
         _database.users.push(newAppUser);
         normalizedUser.daily_streak   = newAppUser.daily_streak;
