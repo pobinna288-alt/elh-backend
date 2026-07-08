@@ -440,44 +440,32 @@ router.post("/verify-otp", async (req, res, next) => {
     if (_database && Array.isArray(_database.users)) {
       const userId    = String(normalizedUser.id);
       const userEmail = String(normalizedUser.email || "").toLowerCase();
+      const now       = new Date();
 
-      const existingIdx = _database.users.findIndex(
+      const appUser = _database.users.find(
         (u) => String(u.id) === userId ||
                String(u.email || "").toLowerCase() === userEmail
       );
 
-      const now = new Date();
-
-      if (existingIdx !== -1) {
-        const existing     = _database.users[existingIdx].__rawTarget || _database.users[existingIdx];
-        const previousDate = existing.last_active_date ? new Date(existing.last_active_date) : null;
-
-        let newStreak = Number(existing.daily_streak) || 0;
+      if (appUser) {
+        const previousDate = appUser.last_active_date ? new Date(appUser.last_active_date) : null;
         if (!previousDate || Number.isNaN(previousDate.getTime())) {
-          newStreak = Math.max(1, newStreak);
+          appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0);
         } else {
           const prevUtc = Date.UTC(previousDate.getUTCFullYear(), previousDate.getUTCMonth(), previousDate.getUTCDate());
           const nowUtc  = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
           const diff    = Math.floor((nowUtc - prevUtc) / (24 * 60 * 60 * 1000));
-          if      (diff >= 2)              newStreak = 1;
-          else if (diff === 1)             newStreak = Math.max(1, newStreak) + 1;
-          else if (!(newStreak > 0))       newStreak = 1;
+          if (diff >= 2)                              appUser.daily_streak = 1;
+          else if (diff === 1)                        appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0) + 1;
+          else if (!(Number(appUser.daily_streak) > 0)) appUser.daily_streak = 1;
         }
-
-        const updatedUser = {
-          ...existing,
-          daily_streak:    newStreak,
-          current_streak:  Math.max(Number(existing.current_streak) || 0, newStreak),
-          streak_count:    newStreak,
-          last_active_date: now.toISOString(),
-          updatedAt:       now,
-        };
-
-        _database.users[existingIdx] = updatedUser;
-
-        normalizedUser.daily_streak   = updatedUser.daily_streak;
-        normalizedUser.current_streak = updatedUser.current_streak;
-        normalizedUser.streak_count   = updatedUser.streak_count;
+        appUser.current_streak   = Math.max(Number(appUser.current_streak) || 0, Number(appUser.daily_streak) || 0);
+        appUser.streak_count     = Number(appUser.daily_streak) || 0;
+        appUser.last_active_date = now.toISOString();
+        appUser.updatedAt        = now;
+        normalizedUser.daily_streak   = appUser.daily_streak;
+        normalizedUser.current_streak = appUser.current_streak;
+        normalizedUser.streak_count   = appUser.streak_count;
       } else {
         const newAppUser = {
           id:              normalizedUser.id,
