@@ -722,7 +722,6 @@ const buildAuthMeUserPayload = (resolvedUser = {}, userId = null, email = null, 
     streakDays: Number(resolvedUser.daily_streak || 0),
     coin_balance: coinBalance,
     coins: resolvedUser.coins ?? coinBalance,
-    ecoins: resolvedUser.ecoins ?? coinBalance,
   };
 };
 
@@ -951,7 +950,6 @@ const sendInvalidPhoneResponse = (res) => {
       streakDays: Number(resolvedUser.daily_streak || 0),
       coin_balance: resolvedUser.coin_balance,
       coins: resolvedUser.coins ?? resolvedUser.coin_balance,
-      ecoins: resolvedUser.ecoins ?? resolvedUser.coin_balance,
     },
   });
 };
