@@ -1,0 +1,33 @@
+import { describe } from "node:test";
+
+const { buildAuthMeUserPayload } = require("../backend/routes/authRoutes");
+
+describe("buildAuthMeUserPayload", () => {
+  it("returns persisted coin fields from the resolved user record", () => {
+    const payload = buildAuthMeUserPayload(
+      {
+        id: "user-1",
+        email: "user@example.com",
+        daily_streak: 2,
+        current_streak: 3,
+        streak_count: 4,
+        coin_balance: 120,
+        coins: 130,
+      },
+      "user-1",
+      "user@example.com",
+      { role: "user", is_admin: false },
+    );
+
+    expect(payload).toMatchObject({
+      id: "user-1",
+      email: "user@example.com",
+      daily_streak: 2,
+      current_streak: 3,
+      streak_count: 4,
+      coin_balance: 120,
+      coins: 130,
+    });
+    expect(payload).not.toHaveProperty("ecoins");
+  });
+});
