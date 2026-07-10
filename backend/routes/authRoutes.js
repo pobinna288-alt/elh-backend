@@ -2986,10 +2986,12 @@ router.get("/me", (req, res) => {
       console.log("[DIAG] /auth/me - user NOT found in app.db (users table) — falling back to JWT payload only");
       console.log("[DIAG] /auth/me - JWT payload has no streak fields, so all streaks will be 0");
     }
-    console.log("[DIAG] /auth/me - resolvedUser streak values:", {
+    console.log("[DIAG] /auth/me - resolvedUser key values:", {
       daily_streak:   resolvedUser.daily_streak   ?? "MISSING",
       current_streak: resolvedUser.current_streak ?? "MISSING",
       streak_count:   resolvedUser.streak_count   ?? "MISSING",
+      coin_balance:   resolvedUser.coin_balance   ?? "MISSING",
+      coins:          resolvedUser.coins          ?? "MISSING",
     });
 
     return res.status(200).json({
