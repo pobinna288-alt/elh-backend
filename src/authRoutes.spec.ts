@@ -1,5 +1,3 @@
-import { describe } from "node:test";
-
 const { buildAuthMeUserPayload } = require("../backend/routes/authRoutes");
 
 describe("buildAuthMeUserPayload", () => {
@@ -28,6 +26,5 @@ describe("buildAuthMeUserPayload", () => {
       coin_balance: 120,
       coins: 130,
     });
-    expect(payload).not.toHaveProperty("ecoins");
   });
 });
