@@ -84,6 +84,34 @@ const hydratePersistedPhoneUsers = () => {
   return hydratedCount;
 };
 
+const hydratePersistedUserById = (userId) => {
+  if (!database || !Array.isArray(database.users) || !userId) {
+    return null;
+  }
+
+  const store = getAuthStore();
+  if (!store?.enabled) {
+    return null;
+  }
+
+  const persistedUser = store.listUsers().find((entry) => String(entry.id || entry.userId) === String(userId));
+  if (!persistedUser) {
+    return null;
+  }
+
+  const existingIndex = database.users.findIndex((entry) => String(entry.id) === String(persistedUser.id || persistedUser.userId));
+  if (existingIndex >= 0) {
+    database.users[existingIndex] = {
+      ...persistedUser,
+      ...database.users[existingIndex],
+    };
+    return database.users[existingIndex];
+  }
+
+  database.users.push(persistedUser);
+  return database.users[database.users.length - 1];
+};
+
 /**
  * Initialize auth routes with database and config
  */
@@ -646,37 +674,56 @@ const commitUserRecord = (user, reservation = {}) => {
   }
 
   database.users.push(user);
+  const insertedUser = database.users[database.users.length - 1];
 
   if (emailKey) {
     state.reservedEmails.delete(emailKey);
-    state.emails.set(emailKey, user.id);
+    state.emails.set(emailKey, insertedUser.id);
   }
 
   if (phoneKey) {
     state.reservedPhones.delete(phoneKey);
-    state.phones.set(phoneKey, user.id);
+    state.phones.set(phoneKey, insertedUser.id);
   }
 
   if (usernameKey) {
     state.reservedUsernames.delete(usernameKey);
-    state.usernames.set(usernameKey, user.id);
+    state.usernames.set(usernameKey, insertedUser.id);
   }
 
   if (referralKey) {
     state.reservedReferralCodes.delete(referralKey);
-    state.referralCodes.set(referralKey, user.id);
+    state.referralCodes.set(referralKey, insertedUser.id);
   }
 
   const store = getAuthStore();
   if (store?.enabled) {
-    store.syncUser(user);
+    store.syncUser(insertedUser);
   }
 
-  return user;
+  return insertedUser;
 };
 
 const buildReferralLink = (referralCode) => {
   return `${getBaseUrl()}/register?ref=${encodeURIComponent(referralCode)}`;
+};
+
+const buildAuthMeUserPayload = (resolvedUser = {}, userId = null, email = null, adminFlags = {}) => {
+  const coinBalance = resolvedUser.coin_balance ?? resolvedUser.coins ?? resolvedUser.coinBalance ?? null;
+
+  return {
+    id: resolvedUser.id || resolvedUser.userId || userId,
+    email: resolvedUser.email || email,
+    role: resolvedUser.role || adminFlags.role,
+    is_admin: Boolean(resolvedUser.is_admin ?? adminFlags.is_admin),
+    daily_streak: Number(resolvedUser.daily_streak || 0),
+    current_streak: Number(resolvedUser.current_streak || 0),
+    streak_count: Number(resolvedUser.streak_count || 0),
+    streakDays: Number(resolvedUser.daily_streak || 0),
+    coin_balance: coinBalance,
+    coins: resolvedUser.coins ?? coinBalance,
+    ecoins: resolvedUser.ecoins ?? coinBalance,
+  };
 };
 
 const touchDailyActivity = (user) => {
@@ -882,26 +929,31 @@ const normalizePhoneNumber = (phoneInput, countryCode = "", fullPhone = "") => {
   return null;
 };
 
-const sendInvalidPhoneResponse = (res) => {
-  return res.status(400).json({
-    success: false,
-    error: "Invalid phone number format",
-    message: "Invalid phone number format",
-    error_code: "INVALID_PHONE_NUMBER",
-  });
-};
-
-const shouldExposeTestOtp = () => {
-  const testOtpFlag = `${process.env.RETURN_TEST_OTP || ""}`.trim().toLowerCase();
-  return process.env.NODE_ENV !== "production" || testOtpFlag === "true" || testOtpFlag === "1";
-};
-
 const generateOtpCode = () => {
   const configuredLength = Number(process.env.OTP_LENGTH || AUTH_CONFIG.OTP_LENGTH || 6);
   const otpLength = Number.isFinite(configuredLength) ? Math.min(6, Math.max(4, configuredLength)) : 6;
   const min = 10 ** (otpLength - 1);
   const max = 10 ** otpLength;
   return `${crypto.randomInt(min, max)}`;
+};
+
+const sendInvalidPhoneResponse = (res) => {
+  return res.status(200).json({
+    success: true,
+    user: {
+      id: resolvedUser.id || resolvedUser.userId || userId,
+      email: resolvedUser.email || email,
+      role: resolvedUser.role || adminFlags.role,
+      is_admin: Boolean(resolvedUser.is_admin ?? adminFlags.is_admin),
+      daily_streak: Number(resolvedUser.daily_streak || 0),
+      current_streak: Number(resolvedUser.current_streak || 0),
+      streak_count: Number(resolvedUser.streak_count || 0),
+      streakDays: Number(resolvedUser.daily_streak || 0),
+      coin_balance: resolvedUser.coin_balance,
+      coins: resolvedUser.coins ?? resolvedUser.coin_balance,
+      ecoins: resolvedUser.ecoins ?? resolvedUser.coin_balance,
+    },
+  });
 };
 
 const hashTokenValue = (value) => {
@@ -1141,8 +1193,9 @@ const findUserByPhoneNumber = (phoneNumber, countryCode = "", fullPhone = "") =>
     };
     syncUserPhoneFields(hydratedUser);
     database.users.push(hydratedUser);
-    state.phones.set(phoneKey, hydratedUser.id);
-    return hydratedUser;
+    const wrappedUser = database.users[database.users.length - 1];
+    state.phones.set(phoneKey, wrappedUser.id);
+    return wrappedUser;
   }
 
   return null;
@@ -2911,7 +2964,7 @@ router.get("/me", (req, res) => {
     const userId = decoded.id || decoded.userId || decoded.sub || null;
     const email = decoded.email || null;
 
-    const persistedUser = Array.isArray(database?.users)
+    let persistedUser = Array.isArray(database?.users)
       ? database.users.find((entry) => {
           const entryId = String(entry?.id ?? "");
           const decodedId = String(userId ?? "");
@@ -2921,6 +2974,10 @@ router.get("/me", (req, res) => {
           return entryId === decodedId || entryEmail === decodedEmail;
         })
       : null;
+
+    if (!persistedUser && userId) {
+      persistedUser = hydratePersistedUserById(userId);
+    }
 
     const resolvedUser = persistedUser ? { ...decoded, ...persistedUser } : decoded;
     const adminFlags = resolveAdminFlags(resolvedUser);
@@ -2939,16 +2996,7 @@ router.get("/me", (req, res) => {
 
     return res.status(200).json({
       success: true,
-      user: {
-        id: resolvedUser.id || resolvedUser.userId || userId,
-        email: resolvedUser.email || email,
-        role: resolvedUser.role || adminFlags.role,
-        is_admin: Boolean(resolvedUser.is_admin ?? adminFlags.is_admin),
-        daily_streak: Number(resolvedUser.daily_streak || 0),
-        current_streak: Number(resolvedUser.current_streak || 0),
-        streak_count: Number(resolvedUser.streak_count || 0),
-        streakDays: Number(resolvedUser.daily_streak || 0),
-      },
+      user: buildAuthMeUserPayload(resolvedUser, userId, email, adminFlags),
     });
   } catch (error) {
     return res.status(401).json({
@@ -3071,7 +3119,8 @@ router.post("/check-email", (req, res) => {
 // EXPORTS
 // ============================================
 
-module.exports = { 
-  authRouter: router, 
-  initAuthRoutes 
+module.exports = {
+  authRouter: router,
+  initAuthRoutes,
+  buildAuthMeUserPayload,
 };
