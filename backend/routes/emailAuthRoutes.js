@@ -462,10 +462,6 @@ router.post("/verify-otp", async (req, res, next) => {
           is_admin:        normalizedUser.is_admin || false,
           status:          normalizedUser.status || "active",
           plan:            normalizedUser.plan   || "FREE",
-          daily_streak:    1,
-          current_streak:  1,
-          streak_count:    1,
-          last_active_date: now.toISOString(),
           last_streak_claimed_at: null,
           coins:           0,
           coin_balance:    0,
@@ -473,6 +469,10 @@ router.post("/verify-otp", async (req, res, next) => {
           createdAt:       normalizedUser.createdAt || now,
           updatedAt:       now,
         };
+        
+        // Use centralized streak service for new user initialization
+        const { updateDailyStreak } = require('../services/streakService');
+        updateDailyStreak(newAppUser);
         _database.users.push(newAppUser);
         normalizedUser.daily_streak   = newAppUser.daily_streak;
         normalizedUser.current_streak = newAppUser.current_streak;
