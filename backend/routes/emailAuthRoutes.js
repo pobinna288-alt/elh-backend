@@ -448,21 +448,8 @@ router.post("/verify-otp", async (req, res, next) => {
       );
 
       if (appUser) {
-        const previousDate = appUser.last_active_date ? new Date(appUser.last_active_date) : null;
-        if (!previousDate || Number.isNaN(previousDate.getTime())) {
-          appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0);
-        } else {
-          const prevUtc = Date.UTC(previousDate.getUTCFullYear(), previousDate.getUTCMonth(), previousDate.getUTCDate());
-          const nowUtc  = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-          const diff    = Math.floor((nowUtc - prevUtc) / (24 * 60 * 60 * 1000));
-          if (diff >= 2)                              appUser.daily_streak = 1;
-          else if (diff === 1)                        appUser.daily_streak = Math.max(1, Number(appUser.daily_streak) || 0) + 1;
-          else if (!(Number(appUser.daily_streak) > 0)) appUser.daily_streak = 1;
-        }
-        appUser.current_streak   = Math.max(Number(appUser.current_streak) || 0, Number(appUser.daily_streak) || 0);
-        appUser.streak_count     = Number(appUser.daily_streak) || 0;
-        appUser.last_active_date = now.toISOString();
-        appUser.updatedAt        = now;
+        const { updateDailyStreak } = require('../services/streakService');
+        updateDailyStreak(appUser);
         normalizedUser.daily_streak   = appUser.daily_streak;
         normalizedUser.current_streak = appUser.current_streak;
         normalizedUser.streak_count   = appUser.streak_count;

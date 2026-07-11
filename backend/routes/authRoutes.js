@@ -728,40 +728,8 @@ const buildAuthMeUserPayload = (resolvedUser = {}, userId = null, email = null, 
 const touchDailyActivity = (user) => {
   if (!user) return user;
 
-  const now = new Date();
-  const previousDate = user.last_active_date ? new Date(user.last_active_date) : null;
-
-  user.coin_balance = Number.isFinite(Number(user.coin_balance))
-    ? Number(user.coin_balance)
-    : Number.isFinite(Number(user.coins))
-      ? Number(user.coins)
-      : 0;
-  user.coins = user.coin_balance;
-
-  if (!Number.isFinite(Number(user.trust_score))) {
-    user.trust_score = 50;
-  }
-
-  if (!previousDate || Number.isNaN(previousDate.getTime())) {
-    user.daily_streak = Math.max(1, Number(user.daily_streak) || 0);
-  } else {
-    const previousUtc = Date.UTC(previousDate.getUTCFullYear(), previousDate.getUTCMonth(), previousDate.getUTCDate());
-    const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const dayDifference = Math.floor((nowUtc - previousUtc) / (24 * 60 * 60 * 1000));
-
-    if (dayDifference >= 2) {
-      user.daily_streak = 1;
-    } else if (dayDifference === 1) {
-      user.daily_streak = Math.max(1, Number(user.daily_streak) || 0) + 1;
-    } else if (!(Number(user.daily_streak) > 0)) {
-      user.daily_streak = 1;
-    }
-  }
-
-  user.current_streak = Math.max(Number(user.current_streak) || 0, Number(user.daily_streak) || 0);
-  user.streak_count = Number(user.daily_streak) || 0;
-  user.last_active_date = now.toISOString();
-  return user;
+  const { updateDailyStreak } = require('../services/streakService');
+  return updateDailyStreak(user);
 };
 
 /**
