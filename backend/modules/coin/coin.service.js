@@ -8,11 +8,6 @@ const {
 } = require("../../common/coinLedger");
 
 const SERVER_REWARD_RULES = Object.freeze({
-  daily_bonus: {
-    amount: 10,
-    maxPerDay: 1,
-    description: "Daily bonus reward",
-  },
   engagement_reward: {
     amount: 5,
     maxPerDay: 5,
