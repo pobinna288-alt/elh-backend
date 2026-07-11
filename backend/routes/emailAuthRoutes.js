@@ -479,6 +479,7 @@ router.post("/verify-otp", async (req, res, next) => {
           current_streak:  1,
           streak_count:    1,
           last_active_date: now.toISOString(),
+          last_streak_claimed_at: null,
           coins:           0,
           coin_balance:    0,
           trust_score:     50,

@@ -31,6 +31,19 @@ function createCoinController(coinService) {
         });
       }
     },
+
+    claimDailyStreak: (req, res) => {
+      try {
+        const result = coinService.claimDailyStreakReward(req.user.id);
+        return res.status(result.status).json(result.body);
+      } catch (error) {
+        console.error("Claim daily streak error:", error);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to claim daily streak reward",
+        });
+      }
+    },
   };
 }
 

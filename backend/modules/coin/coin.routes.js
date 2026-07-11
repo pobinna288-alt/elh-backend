@@ -9,6 +9,7 @@ function createCoinRoutes(context) {
 
   router.get("/balance", context.authenticateToken, controller.getBalance);
   router.post("/earn", context.authenticateToken, controller.earn);
+  router.post("/claim-daily-streak", context.authenticateToken, controller.claimDailyStreak);
 
   return router;
 }

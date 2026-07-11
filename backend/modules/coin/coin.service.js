@@ -255,6 +255,84 @@ function createCoinService({ database, createNotification }) {
     getDailyCoinStats(viewerId) {
       return coinRewardService.getViewerDailyStats(viewerId);
     },
+
+    claimDailyStreakReward(userId) {
+      const user = database.users.find((entry) => entry.id === userId);
+      if (!user) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            error: "User not found",
+          },
+        };
+      }
+
+      // Check if user has an active streak
+      const dailyStreak = Number(user.daily_streak) || 0;
+      if (dailyStreak === 0) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            error: "No active streak to claim",
+            daily_streak: dailyStreak,
+          },
+        };
+      }
+
+      // Check if already claimed today
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
+      const lastClaimedAt = user.last_streak_claimed_at ? new Date(user.last_streak_claimed_at).toISOString().split("T")[0] : null;
+      
+      if (lastClaimedAt === today) {
+        return {
+          status: 429,
+          body: {
+            success: false,
+            error: "Daily streak reward already claimed today",
+            daily_streak: dailyStreak,
+            coin_balance: Number(user.coin_balance) || 0,
+          },
+        };
+      }
+
+      // Calculate reward based on streak day
+      let reward;
+      if (dailyStreak === 1) reward = 10;
+      else if (dailyStreak === 2) reward = 15;
+      else if (dailyStreak === 3) reward = 20;
+      else if (dailyStreak === 4) reward = 25;
+      else if (dailyStreak === 5) reward = 30;
+      else if (dailyStreak === 6) reward = 35;
+      else reward = 50; // Day 7 and beyond
+
+      // Update coin_balance (add to existing balance)
+      const currentBalance = Number(user.coin_balance) || 0;
+      user.coin_balance = currentBalance + reward;
+      user.coins = user.coin_balance; // Keep coins in sync
+      user.last_streak_claimed_at = now.toISOString();
+      user.updatedAt = now;
+
+      // Find user index to update the array
+      const userIndex = database.users.findIndex((entry) => entry.id === userId);
+      if (userIndex !== -1) {
+        database.users[userIndex] = user;
+      }
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: `Daily streak reward claimed: ${reward} coins`,
+          reward: reward,
+          daily_streak: dailyStreak,
+          coin_balance: user.coin_balance,
+          coins: user.coins,
+        },
+      };
+    },
   };
 }
 
