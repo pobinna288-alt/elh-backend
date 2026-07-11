@@ -1,4 +1,3 @@
-const coinRewardService = require("../../services/coinRewardService");
 const {
   appendLedgerTransaction,
   ensureTransactionStore,
@@ -36,8 +35,6 @@ function countRewardTransactionsForToday(database, userId, action) {
 
 function createCoinService({ database, createNotification }) {
   return {
-    coinRewardService,
-
     getCoinBalance(userId) {
       const user = database.users.find((entry) => entry.id === userId);
       if (!user) {
@@ -247,10 +244,6 @@ function createCoinService({ database, createNotification }) {
       };
     },
 
-    getDailyCoinStats(viewerId) {
-      return coinRewardService.getViewerDailyStats(viewerId);
-    },
-
     claimDailyStreakReward(userId) {
       const user = database.users.find((entry) => entry.id === userId);
       if (!user) {
@@ -332,6 +325,5 @@ function createCoinService({ database, createNotification }) {
 }
 
 module.exports = {
-  coinRewardService,
   createCoinService,
 };

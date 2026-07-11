@@ -107,6 +107,10 @@ function createReferralService(context = {}) {
           email: authUser.email || null,
           plan: authUser.plan || "FREE",
           createdAt: new Date().toISOString(),
+          last_active_date: null,
+          daily_streak: 0,
+          current_streak: 0,
+          streak_count: 0,
         };
         ensureUserProfileDefaults(user);
         database.users.push(user);

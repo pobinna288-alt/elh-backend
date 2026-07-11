@@ -1,7 +1,6 @@
 const { createModuleContext } = require("../common/moduleContext");
 const { registerAuthModule } = require("../modules/auth/auth.routes");
 const { registerCoinModule } = require("../modules/coin/coin.routes");
-const { registerVideoWatchModule } = require("../modules/videoWatch/videoWatch.routes");
 const { registerUploadModule } = require("../modules/upload/upload.routes");
 const { registerAiModule } = require("../modules/ai/ai.routes");
 const { registerReferralModule } = require("../modules/referral/referral.routes");
@@ -51,8 +50,7 @@ function registerAppRoutes(app, dependencies = {}) {
 
   app.use("/ads", adTargetingRoutes);
   registerAiModule(app, context);
-  registerVideoWatchModule(app, context);
-
+  
   app.set("database", context.database);
   app.use("/api/search", searchRoutes);
   app.use("/api/trust", trustScoreRoutes);

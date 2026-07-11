@@ -1,7 +1,6 @@
 const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const path = require("path");
-const coinRewardService = require("../../services/coinRewardService");
 const videoDurationExtractor = require("../../utils/videoDurationExtractor");
 const { normalizeCurrencyCode } = require("../../services/currencyConversionService");
 const { convertToUsd } = require("../../services/currencyConversionService");
@@ -23,7 +22,6 @@ function createUploadService({
   storeAdRecord,
 }) {
   return {
-    coinRewardService,
     videoDurationExtractor,
 
     updateProfilePicture({ userId, files }) {
@@ -236,7 +234,6 @@ function createUploadService({
 }
 
 module.exports = {
-  coinRewardService,
   videoDurationExtractor,
   createUploadService,
 };

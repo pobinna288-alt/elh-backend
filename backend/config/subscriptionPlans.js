@@ -1,9 +1,8 @@
 /**
  * El Hannora - Subscription Plan Configuration
- * Coin Reward Engine
  * 
  * This configuration defines the subscription plans and their
- * associated video duration limits and coin reward caps.
+ * associated features and coin limits.
  * 
  * SECURITY: These values are server-side only.
  * Frontend cannot override these configurations.
@@ -97,28 +96,6 @@ const SUBSCRIPTION_PLANS = {
 // Default plan for new users
 const DEFAULT_PLAN = 'NORMAL';
 
-// Daily coin cap for viewers (anti-farming protection)
-const VIEWER_DAILY_COIN_CAP = 50;
-
-// Plan-specific daily coin limits for viewers
-const PLAN_DAILY_COIN_CAP = {
-  PREMIUM: SUBSCRIPTION_PLANS.PREMIUM.daily_coin_limit,
-  PRO: SUBSCRIPTION_PLANS.PRO.daily_coin_limit,
-  HOT: SUBSCRIPTION_PLANS.HOT.daily_coin_limit,
-  ENTERPRISE: SUBSCRIPTION_PLANS.ENTERPRISE.daily_coin_limit,
-};
-
-// Watch completion threshold required to earn coins (90%)
-const WATCH_COMPLETION_THRESHOLD = 0.90;
-
-// Minimum watch duration to be considered valid (prevents instant skips)
-const MINIMUM_WATCH_DURATION_SECONDS = 5;
-
-// Maximum playback speed allowed (anti-cheat)
-const MAX_ALLOWED_PLAYBACK_SPEED = 1.5;
-
-// Session timeout for watch tracking (5 minutes of inactivity)
-const WATCH_SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Get plan configuration by plan type
@@ -168,12 +145,6 @@ module.exports = {
   PREMIUM_COINS,
   PREMIUM_DURATION_DAYS,
   DEFAULT_PLAN,
-  VIEWER_DAILY_COIN_CAP,
-  PLAN_DAILY_COIN_CAP,
-  WATCH_COMPLETION_THRESHOLD,
-  MINIMUM_WATCH_DURATION_SECONDS,
-  MAX_ALLOWED_PLAYBACK_SPEED,
-  WATCH_SESSION_TIMEOUT_MS,
   getPlanConfig,
   getBillingConfig,
   isValidPlan,

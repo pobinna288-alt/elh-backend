@@ -1,4 +1,8 @@
 const { AD_CATEGORIES, findAdCategory } = require("../config/adCategories");
+const { FALLBACK_USD_RATES } = require("../services/currencyConversionService");
+
+// All ISO currency codes explicitly supported by the exchange-rate layer.
+const SUPPORTED_CURRENCY_CODES = Object.freeze(new Set(Object.keys(FALLBACK_USD_RATES)));
 
 const ALLOWED_AD_TYPES = Object.freeze(["image", "video", "text"]);
 const TITLE_LIMITS = Object.freeze({ min: 5, max: 50 });
@@ -150,23 +154,52 @@ function validateAdCreateRequest(req, res, next) {
     });
   }
 
+  // ── Price & Currency (both optional) ──────────────────────────────────────
+  // Price is never required regardless of ad type.
+  //   - If price is absent → store price = null, currency = null.
+  //   - If price is present → validate it, then require a valid currency.
+  // Existing clients that always send both fields continue to work unchanged.
+
   let parsedPrice = null;
-  if (body.price !== undefined && body.price !== null && `${body.price}`.trim() !== "") {
-    parsedPrice = Number.parseFloat(body.price);
+  let currency = null;
+
+  const priceRaw = body.price;
+  const priceIsProvided = priceRaw !== undefined && priceRaw !== null && `${priceRaw}`.trim() !== "";
+
+  if (priceIsProvided) {
+    // A price was supplied — validate it is a non-negative number.
+    parsedPrice = Number.parseFloat(priceRaw);
 
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
       return sendValidationError(res, "price", "Price must be a valid non-negative number");
     }
-  }
 
-  const currency = sanitizePlainText(body.currency || "USD").toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) {
-    return sendValidationError(
-      res,
-      "currency",
-      "Currency must be a valid 3-letter ISO code like NGN, GHS, EUR, or USD",
-    );
+    // A price was given, so a currency is now required.
+    const rawCurrency = sanitizePlainText(body.currency || "").toUpperCase();
+
+    // Reject missing or malformed currency codes (must be exactly 3 letters).
+    if (!rawCurrency || !/^[A-Z]{3}$/.test(rawCurrency)) {
+      return sendValidationError(
+        res,
+        "currency",
+        "Currency is required when a price is provided. Use a valid 3-letter ISO code like NGN, GHS, EUR, or USD",
+      );
+    }
+
+    // Reject currency codes not in the supported set.
+    if (!SUPPORTED_CURRENCY_CODES.has(rawCurrency)) {
+      return sendValidationError(
+        res,
+        "currency",
+        `Unsupported currency "${rawCurrency}". Supported codes: ${[...SUPPORTED_CURRENCY_CODES].join(", ")}`,
+      );
+    }
+
+    currency = rawCurrency;
   }
+  // If no price is provided both parsedPrice and currency remain null — the ad
+  // is created successfully without any pricing information.
+  // ─────────────────────────────────────────────────────────────────────────
 
   const hasImageMedia = files.some(file => IMAGE_PATTERN.test(`${file?.mimetype || ""} ${file?.originalname || ""}`))
     || mediaUrls.some(item => IMAGE_PATTERN.test(item));
@@ -242,6 +275,7 @@ function validateAdCreateRequest(req, res, next) {
   req.body.ad_type = adType;
   req.body.category_id = category.id;
   req.body.category = category.name;
+  // Persist the resolved currency (null when no price was provided).
   req.body.currency = currency;
 
   if (parsedPrice !== null) {
