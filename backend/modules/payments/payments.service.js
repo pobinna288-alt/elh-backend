@@ -2,6 +2,7 @@ const axios = require("axios");
 const { randomBytes, randomUUID } = require("crypto");
 const { activateConnectionAfterPayment } = require("../../services/instantConnectionSearchService");
 const { checkActiveSubscription, buildActiveSubscriptionResponse } = require("../../common/subscriptionGuard");
+const { resolveUserById } = require("../../common/resolveUser");
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 const PAYSTACK_TIMEOUT_MS = 10000;
@@ -109,8 +110,11 @@ function normalizeDurationDays(rawValue) {
 }
 
 function activateUserFeatures({ database, transaction, createNotification }) {
-  const userIndex = database.users.findIndex((entry) => entry?.id === transaction.userId);
-  if (userIndex === -1) {
+  const user = resolveUserById(database, transaction.userId);
+  console.log("[IDENTITY] payments.activateUserFeatures - requested userId:", transaction.userId);
+  console.log("[IDENTITY] payments.activateUserFeatures - resolved record id:", user?.id ?? "NOT_FOUND");
+  console.log("[IDENTITY] payments.activateUserFeatures - resolved record email:", user?.email ?? "NOT_FOUND");
+  if (!user) {
     return {
       success: false,
       message: "User not found for post-payment activation",
@@ -119,7 +123,7 @@ function activateUserFeatures({ database, transaction, createNotification }) {
     };
   }
 
-  const user = database.users[userIndex];
+  const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
 
   // Safety net: block double-activation if subscription is still active
   const subStatus = checkActiveSubscription(user);
@@ -232,7 +236,10 @@ function createPaymentsService({ database, createNotification, onPaymentActivate
       });
     }
 
-    const initiatingUser = database.users.find((entry) => entry?.id === userId);
+    const initiatingUser = resolveUserById(database, userId);
+    console.log("[IDENTITY] payments.initializeCheckout - requested userId:", userId);
+    console.log("[IDENTITY] payments.initializeCheckout - resolved record id:", initiatingUser?.id ?? "NOT_FOUND");
+    console.log("[IDENTITY] payments.initializeCheckout - resolved record email:", initiatingUser?.email ?? "NOT_FOUND");
     const subStatus = checkActiveSubscription(initiatingUser);
     if (subStatus.active) {
       console.log("Subscription blocked: active plan exists for user:", userId);

@@ -19,6 +19,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { resolveUserById } = require('../common/resolveUser');
 const {
   getTrustScore,
   getTrustSummary,
@@ -86,7 +87,11 @@ const validateUserId = (req, res, next) => {
 router.get('/trust-score/:userId', validateUserId, (req, res) => {
   try {
     const database = req.app.get('database');
-    const user = database?.users?.find(u => u.id === req.params.userId);
+    const user = resolveUserById(database, req.params.userId);
+
+    console.log('[IDENTITY] /trust/trust-score/:userId - requested userId:', req.params.userId);
+    console.log('[IDENTITY] /trust/trust-score/:userId - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/trust-score/:userId - resolved record email:', user?.email ?? 'NOT_FOUND');
 
     if (!user) {
       return res.status(404).json({
@@ -118,8 +123,14 @@ router.get('/trust-score/:userId', validateUserId, (req, res) => {
 const sendTrustScoreResponse = (req, res, userId) => {
   try {
     const database = req.app.get('database');
-    const scorePayload = getTrustScore(userId, database?.users || []);
-    
+    const user = resolveUserById(database, userId);
+
+    console.log('[IDENTITY] /trust/score - requested userId:', userId);
+    console.log('[IDENTITY] /trust/score - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/score - resolved record email:', user?.email ?? 'NOT_FOUND');
+
+    const scorePayload = user ? getTrustScore(user.id, database?.users || []) : null;
+
     if (!scorePayload) {
       return res.status(404).json({
         success: false,
@@ -164,8 +175,12 @@ router.get('/score/:userId', validateUserId, (req, res) => {
 router.get('/summary/:userId', validateUserId, (req, res) => {
   try {
     const database = req.app.get('database');
-    const user = database?.users?.find(u => u.id === req.params.userId);
-    
+    const user = resolveUserById(database, req.params.userId);
+
+    console.log('[IDENTITY] /trust/summary/:userId - requested userId:', req.params.userId);
+    console.log('[IDENTITY] /trust/summary/:userId - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/summary/:userId - resolved record email:', user?.email ?? 'NOT_FOUND');
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -296,8 +311,12 @@ router.post('/verify-email', (req, res) => {
       });
     }
     
-    const user = database?.users?.find(u => u.id === req.user.id);
-    
+    const user = resolveUserById(database, req.user.id);
+
+    console.log('[IDENTITY] /trust/verify-email - auth user id:', req.user.id);
+    console.log('[IDENTITY] /trust/verify-email - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/verify-email - resolved record email:', user?.email ?? 'NOT_FOUND');
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -333,8 +352,12 @@ router.post('/check-age-bonus', (req, res) => {
       });
     }
     
-    const user = database?.users?.find(u => u.id === req.user.id);
-    
+    const user = resolveUserById(database, req.user.id);
+
+    console.log('[IDENTITY] /trust/check-age-bonus - auth user id:', req.user.id);
+    console.log('[IDENTITY] /trust/check-age-bonus - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/check-age-bonus - resolved record email:', user?.email ?? 'NOT_FOUND');
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -381,13 +404,17 @@ router.post('/report', (req, res) => {
     // Find the user being reported
     let reportedUser;
     if (reported_user_id) {
-      reportedUser = database?.users?.find(u => u.id === reported_user_id);
+      reportedUser = resolveUserById(database, reported_user_id);
     } else if (ad_id) {
       const ad = database?.ads?.find(a => a.id === ad_id);
       if (ad) {
-        reportedUser = database?.users?.find(u => u.id === ad.seller_id);
+        reportedUser = resolveUserById(database, ad.seller_id);
       }
     }
+
+    console.log('[IDENTITY] /trust/report - reported user id:', reported_user_id ?? ad_id);
+    console.log('[IDENTITY] /trust/report - resolved record id:', reportedUser?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/report - resolved record email:', reportedUser?.email ?? 'NOT_FOUND');
     
     if (!reportedUser) {
       return res.status(404).json({
@@ -464,8 +491,12 @@ router.post('/violation', (req, res) => {
       });
     }
     
-    const user = database?.users?.find(u => u.id === user_id);
-    
+    const user = resolveUserById(database, user_id);
+
+    console.log('[IDENTITY] /trust/violation - user_id:', user_id);
+    console.log('[IDENTITY] /trust/violation - resolved record id:', user?.id ?? 'NOT_FOUND');
+    console.log('[IDENTITY] /trust/violation - resolved record email:', user?.email ?? 'NOT_FOUND');
+
     if (!user) {
       return res.status(404).json({
         success: false,

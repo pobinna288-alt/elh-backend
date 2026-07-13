@@ -6,6 +6,7 @@ const {
 const { v4: uuidv4 } = require("uuid");
 const { checkActiveSubscription, buildActiveSubscriptionResponse } = require("../../common/subscriptionGuard");
 const { appendLedgerTransaction, syncUserBalanceFromLedger } = require("../../common/coinLedger");
+const { resolveUserById } = require("../../common/resolveUser");
 
 function createSubscriptionService({ database, createNotification, sanitizeUser }) {
   return {
@@ -14,8 +15,11 @@ function createSubscriptionService({ database, createNotification, sanitizeUser 
         ? Number(duration)
         : PREMIUM_DURATION_DAYS;
 
-      const userIndex = database.users.findIndex((entry) => entry.id === userId);
-      if (userIndex === -1) {
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /subscription/unlock - requested userId:", userId);
+      console.log("[IDENTITY] /subscription/unlock - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /subscription/unlock - resolved record email:", user?.email ?? "NOT_FOUND");
+      if (!user) {
         return {
           status: 404,
           body: {
@@ -25,7 +29,7 @@ function createSubscriptionService({ database, createNotification, sanitizeUser 
         };
       }
 
-      const user = database.users[userIndex];
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
 
       const subStatus = checkActiveSubscription(user);
       if (subStatus.active) {
@@ -130,7 +134,10 @@ function createSubscriptionService({ database, createNotification, sanitizeUser 
     },
 
     getPremiumStatus(userId) {
-      const user = database.users.find((entry) => entry.id === userId);
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /subscription/status - requested userId:", userId);
+      console.log("[IDENTITY] /subscription/status - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /subscription/status - resolved record email:", user?.email ?? "NOT_FOUND");
       if (!user) {
         return {
           status: 404,

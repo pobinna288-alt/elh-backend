@@ -1,3 +1,5 @@
+const { BASE_TRUST_SCORE } = require("./trustScoreService");
+
 /**
  * Streak Service - Single Source of Truth for Daily Streak Progression
  * 
@@ -30,7 +32,7 @@ function updateDailyStreak(user) {
 
   // Initialize trust_score if not set
   if (!Number.isFinite(Number(user.trust_score))) {
-    user.trust_score = 50;
+    user.trust_score = BASE_TRUST_SCORE;
   }
 
   // Calculate streak progression

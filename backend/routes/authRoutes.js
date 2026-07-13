@@ -32,6 +32,8 @@ const {
 } = require("../services/authService");
 const { getAuthSecurityStore } = require("../services/authSecurityStore");
 const { resolveAdminFlags, normalizeUser } = require("../utils/adminRole");
+const { resolveUserFromJwt, resolveUserById } = require("../common/resolveUser");
+const { BASE_TRUST_SCORE } = require("../services/trustScoreService");
 
 // ============================================
 // INITIALIZATION
@@ -382,10 +384,10 @@ const findUserByEmail = (email) => {
 };
 
 /**
- * Find user by ID
+ * Find user by ID (uses shared resolver for normalized lookup)
  */
 const findUserById = (id) => {
-  return database.users.find(u => u.id === id);
+  return resolveUserById(database, id);
 };
 
 const sanitizeUsername = (value) => {
@@ -722,6 +724,9 @@ const buildAuthMeUserPayload = (resolvedUser = {}, userId = null, email = null, 
     streakDays: Number(resolvedUser.daily_streak || 0),
     coin_balance: coinBalance,
     coins: resolvedUser.coins ?? coinBalance,
+    trust_score: Number.isFinite(Number(resolvedUser.trust_score)) ? Number(resolvedUser.trust_score) : null,
+    last_streak_claimed_at: resolvedUser.last_streak_claimed_at ?? null,
+    last_active_date: resolvedUser.last_active_date ?? null,
   };
 };
 
@@ -1003,14 +1008,14 @@ const findLatestOtpRequest = ({ phoneNumber, deviceId }) => {
 
 const applyTrustScoreDelta = (user, delta, reason) => {
   if (!user) {
-    return 50;
+    return BASE_TRUST_SCORE;
   }
 
   const currentScore = Number.isFinite(Number(user.trust_score))
     ? Number(user.trust_score)
     : Number.isFinite(Number(user.trustScore))
       ? Number(user.trustScore)
-      : 50;
+      : BASE_TRUST_SCORE;
 
   const nextScore = Math.max(0, Math.min(100, currentScore + Number(delta || 0)));
   user.trust_score = nextScore;
@@ -1181,7 +1186,7 @@ const resolveRequestDeviceId = (req, rawDeviceId) => {
 const buildPhoneAuthProfile = (user) => {
   const createdAt = user.createdAt || user.created_at || new Date();
   const lastLogin = user.lastLoginAt || user.last_login || new Date();
-  const trustScore = Number(user.trust_score ?? user.trustScore ?? 50);
+  const trustScore = Number(user.trust_score ?? user.trustScore ?? BASE_TRUST_SCORE);
   const coins = Number(user.coin_balance ?? user.coins ?? 0);
   const normalizedPhone = user.normalizedPhone || user.normalized_phone || user.phone_number || user.phoneNumber || user.phone || null;
   const adminFlags = resolveAdminFlags(user);
@@ -1268,7 +1273,7 @@ const createPhoneAuthUser = async ({ phoneNumber, deviceId, ipAddress, country, 
       current_streak: 0,
       coins: 0,
       coin_balance: 0,
-      trust_score: 50,
+      trust_score: BASE_TRUST_SCORE,
       followers: 0,
       total_referrals: 0,
       referral_coins_earned: 0,
@@ -2311,7 +2316,7 @@ router.post("/signup", async (req, res) => {
       current_streak: 0,
       coins: 1000,
       coin_balance: 1000,
-      trust_score: 50,
+      trust_score: BASE_TRUST_SCORE,
       referral_code: referralCode,
       referral_link: buildReferralLink(referralCode),
       total_referrals: 0,
@@ -2931,35 +2936,43 @@ router.get("/me", (req, res) => {
     const email = decoded.email || null;
 
     let persistedUser = Array.isArray(database?.users)
-      ? database.users.find((entry) => {
-          const entryId = String(entry?.id ?? "");
-          const decodedId = String(userId ?? "");
-          const entryEmail = String(entry?.email || entry?.user_email || "").trim().toLowerCase();
-          const decodedEmail = String(email || "").trim().toLowerCase();
-
-          return entryId === decodedId || entryEmail === decodedEmail;
-        })
+      ? resolveUserFromJwt(database, decoded)
       : null;
 
     if (!persistedUser && userId) {
       persistedUser = hydratePersistedUserById(userId);
     }
 
-    const resolvedUser = persistedUser ? { ...decoded, ...persistedUser } : decoded;
+    if (!persistedUser) {
+      console.log("[IDENTITY] /auth/me - JWT id:", userId);
+      console.log("[IDENTITY] /auth/me - JWT email:", email);
+      console.log("[IDENTITY] /auth/me - loaded record id: NOT_FOUND");
+      console.log("[IDENTITY] /auth/me - loaded record email: NOT_FOUND");
+      console.log("[DIAG] /auth/me - user NOT found in app.db — rejecting request");
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    const resolvedUser = { ...decoded, ...persistedUser };
     const adminFlags = resolveAdminFlags(resolvedUser);
 
-    console.log("[DIAG] /auth/me - persistedUser found in app.db:", persistedUser !== null);
-    console.log("[DIAG] /auth/me - userId from JWT:", userId, "| email from JWT:", email);
-    if (!persistedUser) {
-      console.log("[DIAG] /auth/me - user NOT found in app.db (users table) — falling back to JWT payload only");
-      console.log("[DIAG] /auth/me - JWT payload has no streak fields, so all streaks will be 0");
-    }
+    console.log("[IDENTITY] /auth/me - JWT id:", userId);
+    console.log("[IDENTITY] /auth/me - JWT email:", email);
+    console.log("[IDENTITY] /auth/me - loaded record id:", persistedUser.id);
+    console.log("[IDENTITY] /auth/me - loaded record email:", persistedUser.email ?? "NOT_FOUND");
+    console.log("[IDENTITY] /auth/me - match:", String(persistedUser.id) === String(userId));
     console.log("[DIAG] /auth/me - resolvedUser key values:", {
       daily_streak:   resolvedUser.daily_streak   ?? "MISSING",
       current_streak: resolvedUser.current_streak ?? "MISSING",
       streak_count:   resolvedUser.streak_count   ?? "MISSING",
       coin_balance:   resolvedUser.coin_balance   ?? "MISSING",
       coins:          resolvedUser.coins          ?? "MISSING",
+      trust_score:    resolvedUser.trust_score    ?? "MISSING",
+      last_streak_claimed_at: resolvedUser.last_streak_claimed_at ?? "MISSING",
+      last_active_date:       resolvedUser.last_active_date       ?? "MISSING",
     });
 
     return res.status(200).json({

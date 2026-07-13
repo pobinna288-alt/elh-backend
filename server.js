@@ -9,6 +9,7 @@ const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const { randomUUID } = require("crypto");
 const { getClientOrigin, isProduction } = require("./backend/common/envConfig");
+const { resolveUserFromJwt } = require("./backend/common/resolveUser");
 
 const generatePaymentReference = () =>
   `elh_pay_${Date.now()}_${randomUUID().replace(/-/g, "")}`;
@@ -77,7 +78,7 @@ const COIN_TIERS = {
   ELITE: 120000
 };
 
-const createAuthenticateToken = (jwtSecret) => {
+const createAuthenticateToken = (jwtSecret, database) => {
   return (req, res, next) => {
     const publicPaths = new Set([
       "/api/health",
@@ -121,15 +122,35 @@ const createAuthenticateToken = (jwtSecret) => {
 
     try {
       const decoded = jwt.verify(token, jwtSecret);
-      req.auth = decoded;
-      req.user = {
-        ...decoded,
-        id: decoded.id || decoded.userId || decoded.sub || null
-      };
-      req.userId = decoded.userId || decoded.id || null;
+      const jwtId = decoded.id || decoded.userId || decoded.sub || null;
+      const jwtEmail = decoded.email || null;
 
-      console.log("JWT DECODED:", decoded);
-      console.log("REQ USER ID:", req.userId);
+      // Resolve the canonical persisted user record from app.db
+      const persistedUser = (database && Array.isArray(database.users))
+        ? resolveUserFromJwt(database, decoded)
+        : null;
+
+      if (!persistedUser) {
+        console.log("[IDENTITY] authenticateToken - JWT id:", jwtId);
+        console.log("[IDENTITY] authenticateToken - JWT email:", jwtEmail);
+        console.log("[IDENTITY] authenticateToken - resolved record id: NOT_FOUND");
+        console.log("[IDENTITY] authenticateToken - resolved record email: NOT_FOUND");
+        console.log("[DIAG] authenticateToken - no persisted record found; rejecting request");
+        return res.status(401).json({
+          success: false,
+          message: "User not found",
+          code: "USER_NOT_FOUND",
+        });
+      }
+
+      req.auth = decoded;
+      req.user = { ...decoded, ...persistedUser };
+      req.userId = persistedUser.id;
+
+      console.log("[IDENTITY] authenticateToken - JWT id:", jwtId);
+      console.log("[IDENTITY] authenticateToken - JWT email:", jwtEmail);
+      console.log("[IDENTITY] authenticateToken - resolved record id:", persistedUser.id);
+      console.log("[IDENTITY] authenticateToken - resolved record email:", persistedUser.email ?? "NOT_FOUND");
 
       return next();
     } catch (_error) {
@@ -146,7 +167,7 @@ const attachRestoredRoutes = () => {
     process.env.JWT_SECRET || process.env.AUTH_JWT_SECRET || process.env.PAYSTACK_SECRET_KEY || "dev-secret"
   ).trim();
 
-  const authenticateToken = createAuthenticateToken(jwtSecret);
+  const authenticateToken = createAuthenticateToken(jwtSecret, persistentStore);
   let hasTrustRoutes = false;
   let hasAttentionRoutes = false;
   let hasPublicAttentionScoreRoutes = false;

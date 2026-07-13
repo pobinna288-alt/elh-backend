@@ -1,5 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const { getBaseUrl } = require("../../common/envConfig");
+const { BASE_TRUST_SCORE } = require("../../services/trustScoreService");
+const { resolveUserById } = require("../../common/resolveUser");
 
 // ─── Built-in fallback helpers (used when context doesn't supply them) ───────
 
@@ -30,6 +32,7 @@ const _defaultEnsureUserProfileDefaults = (user) => {
   if (user.total_referrals == null) user.total_referrals = 0;
   if (user.referral_coins_earned == null) user.referral_coins_earned = 0;
   if (user.coin_balance == null) user.coin_balance = user.coins || 0;
+  if (user.trust_score == null) user.trust_score = BASE_TRUST_SCORE;
 };
 
 // ─── Service factory ─────────────────────────────────────────────────────────
@@ -89,7 +92,7 @@ function createReferralService(context = {}) {
       }
 
       visited.add(currentUserId);
-      const currentUser = database.users.find((user) => user.id === currentUserId);
+      const currentUser = resolveUserById(database, currentUserId);
       currentUserId = currentUser?.referred_by || null;
     }
 
@@ -98,7 +101,11 @@ function createReferralService(context = {}) {
 
   return {
     getReferralSnapshotByUserId(userId, authUser) {
-      let user = database.users.find((entry) => entry.id === userId);
+      let user = resolveUserById(database, userId);
+
+      console.log("[IDENTITY] /user/referral/:id - requested userId:", userId);
+      console.log("[IDENTITY] /user/referral/:id - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /user/referral/:id - resolved record email:", user?.email ?? "NOT_FOUND");
 
       // Auto-provision: authenticated user exists in JWT but not in database
       if (!user && authUser && authUser.id === userId) {
@@ -114,6 +121,7 @@ function createReferralService(context = {}) {
         };
         ensureUserProfileDefaults(user);
         database.users.push(user);
+        console.log("[IDENTITY] /user/referral/:id - auto-provisioned record id:", user.id);
       }
 
       if (!user) {
@@ -160,7 +168,10 @@ function createReferralService(context = {}) {
       }
 
       try {
-        const referee = database.users.find((user) => user.id === currentUserId);
+        const referee = resolveUserById(database, currentUserId);
+        console.log("[IDENTITY] /user/referral/apply - currentUserId:", currentUserId);
+        console.log("[IDENTITY] /user/referral/apply - resolved referee id:", referee?.id ?? "NOT_FOUND");
+        console.log("[IDENTITY] /user/referral/apply - resolved referee email:", referee?.email ?? "NOT_FOUND");
         if (!referee) {
           return {
             status: 404,

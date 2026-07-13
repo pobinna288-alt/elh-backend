@@ -39,6 +39,7 @@ const { v4: uuidv4 } = require("uuid");
 const { getEmailOtpStore } = require("../services/emailOtpStore");
 const { sendOtpEmail, assertOtpEmailConfigured } = require("../services/emailService");
 const { resolveAdminFlags, normalizeUser } = require("../utils/adminRole");
+const { BASE_TRUST_SCORE } = require("../services/trustScoreService");
 
 const router = express.Router();
 
@@ -433,13 +434,10 @@ router.post("/verify-otp", async (req, res, next) => {
       });
     }
 
-    // ── 10. Issue JWT ─────────────────────────────────────────────────────
-    const normalizedUser = normalizeUser(user);
-    const token = issueJwt(normalizedUser);
-
+    // ── 10. Sync with canonical app.db record BEFORE issuing JWT ─────────────
     if (_database && Array.isArray(_database.users)) {
-      const userId    = String(normalizedUser.id);
-      const userEmail = String(normalizedUser.email || "").toLowerCase();
+      const userId    = String(user.id);
+      const userEmail = String(user.email || "").toLowerCase();
       const now       = new Date();
 
       const appUser = _database.users.find(
@@ -448,37 +446,47 @@ router.post("/verify-otp", async (req, res, next) => {
       );
 
       if (appUser) {
+        console.log("[IDENTITY] email verify-otp - canonical app.db record:", appUser.id, appUser.email);
+        console.log("[IDENTITY] email verify-otp - email-otp store record:", user.id, user.email);
+        // Align the JWT identity with the canonical app.db record so that
+        // /api/auth/me and /coins/claim-daily-streak operate on the same row.
+        user.id = appUser.id;
+        user.email = appUser.email;
+
         const { updateDailyStreak } = require('../services/streakService');
         updateDailyStreak(appUser);
-        normalizedUser.daily_streak   = appUser.daily_streak;
-        normalizedUser.current_streak = appUser.current_streak;
-        normalizedUser.streak_count   = appUser.streak_count;
+        user.daily_streak   = appUser.daily_streak;
+        user.current_streak = appUser.current_streak;
+        user.streak_count   = appUser.streak_count;
       } else {
         const newAppUser = {
-          id:              normalizedUser.id,
-          email:           normalizedUser.email,
-          phone:           normalizedUser.phone || null,
-          role:            normalizedUser.role  || "user",
-          is_admin:        normalizedUser.is_admin || false,
-          status:          normalizedUser.status || "active",
-          plan:            normalizedUser.plan   || "FREE",
+          id:              user.id,
+          email:           user.email,
+          phone:           user.phone || null,
+          role:            user.role  || "user",
+          is_admin:        user.is_admin || false,
+          status:          user.status || "active",
+          plan:            user.plan   || "FREE",
           last_streak_claimed_at: null,
           coins:           0,
           coin_balance:    0,
-          trust_score:     50,
-          createdAt:       normalizedUser.createdAt || now,
+          trust_score:     BASE_TRUST_SCORE,
+          createdAt:       user.createdAt || now,
           updatedAt:       now,
         };
-        
+
         // Use centralized streak service for new user initialization
         const { updateDailyStreak } = require('../services/streakService');
         updateDailyStreak(newAppUser);
         _database.users.push(newAppUser);
-        normalizedUser.daily_streak   = newAppUser.daily_streak;
-        normalizedUser.current_streak = newAppUser.current_streak;
-        normalizedUser.streak_count   = newAppUser.streak_count;
+        user.daily_streak   = newAppUser.daily_streak;
+        user.current_streak = newAppUser.current_streak;
+        user.streak_count   = newAppUser.streak_count;
       }
     }
+
+    const normalizedUser = normalizeUser(user);
+    const token = issueJwt(normalizedUser);
 
     return res.status(200).json({
       success: true,

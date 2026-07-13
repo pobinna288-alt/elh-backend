@@ -5,6 +5,7 @@ const {
   getUserLedgerBalance,
   syncUserBalanceFromLedger,
 } = require("../../common/coinLedger");
+const { resolveUserById } = require("../../common/resolveUser");
 
 const SERVER_REWARD_RULES = Object.freeze({
   engagement_reward: {
@@ -36,7 +37,7 @@ function countRewardTransactionsForToday(database, userId, action) {
 function createCoinService({ database, createNotification }) {
   return {
     getCoinBalance(userId) {
-      const user = database.users.find((entry) => entry.id === userId);
+      const user = resolveUserById(database, userId);
       if (!user) {
         return {
           status: 404,
@@ -61,8 +62,11 @@ function createCoinService({ database, createNotification }) {
     },
 
     earnCoins({ userId, action, requestId, metadata = {} }) {
-      const userIndex = database.users.findIndex((entry) => entry.id === userId);
-      if (userIndex === -1) {
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /coins/earn - requested userId:", userId);
+      console.log("[IDENTITY] /coins/earn - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /coins/earn - resolved record email:", user?.email ?? "NOT_FOUND");
+      if (!user) {
         return {
           status: 404,
           body: {
@@ -71,6 +75,8 @@ function createCoinService({ database, createNotification }) {
           },
         };
       }
+
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
 
       const normalizedAction = normalizeAction(action);
       const rewardRule = SERVER_REWARD_RULES[normalizedAction];
@@ -94,28 +100,28 @@ function createCoinService({ database, createNotification }) {
         };
       }
 
-      const user = database.users[userIndex];
       ensureUserLedger(database, user);
 
-      const rewardCountToday = countRewardTransactionsForToday(database, userId, normalizedAction);
+      const canonicalUserId = String(user?.id ?? userId ?? "");
+      const rewardCountToday = countRewardTransactionsForToday(database, canonicalUserId, normalizedAction);
       if (rewardCountToday >= rewardRule.maxPerDay) {
         return {
           status: 429,
           body: {
             success: false,
             error: `Daily limit reached for ${normalizedAction}`,
-            coin_balance: getUserLedgerBalance(database, userId),
+            coin_balance: getUserLedgerBalance(database, canonicalUserId),
           },
         };
       }
 
       const ledgerResult = appendLedgerTransaction(database, {
-        userId,
+        userId: canonicalUserId,
         amount: rewardRule.amount,
         type: "reward",
         reason: normalizedAction,
         description: rewardRule.description,
-        idempotencyKey: `coins:${userId}:${normalizedAction}:${requestId}`,
+        idempotencyKey: `coins:${canonicalUserId}:${normalizedAction}:${requestId}`,
         metadata: {
           action: normalizedAction,
           requestId,
@@ -163,8 +169,11 @@ function createCoinService({ database, createNotification }) {
     },
 
     deductCoins({ userId, amount, reason = "coin action", requestId, metadata = {} }) {
-      const userIndex = database.users.findIndex((entry) => entry.id === userId);
-      if (userIndex === -1) {
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /coins/deduct - requested userId:", userId);
+      console.log("[IDENTITY] /coins/deduct - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /coins/deduct - resolved record email:", user?.email ?? "NOT_FOUND");
+      if (!user) {
         return {
           status: 404,
           body: {
@@ -173,6 +182,8 @@ function createCoinService({ database, createNotification }) {
           },
         };
       }
+
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
 
       const normalizedAmount = Number(amount) || 0;
       if (normalizedAmount <= 0) {
@@ -185,11 +196,10 @@ function createCoinService({ database, createNotification }) {
         };
       }
 
-      const user = database.users[userIndex];
       ensureUserLedger(database, user);
 
       const ledgerResult = appendLedgerTransaction(database, {
-        userId,
+        userId: user.id,
         amount: -normalizedAmount,
         type: "debit",
         reason,
@@ -227,7 +237,7 @@ function createCoinService({ database, createNotification }) {
     },
 
     validateCoinAction({ userId, requiredAmount = 0 }) {
-      const user = database.users.find((entry) => entry.id === userId);
+      const user = resolveUserById(database, userId);
       if (!user) {
         return {
           success: false,
@@ -236,7 +246,8 @@ function createCoinService({ database, createNotification }) {
       }
 
       ensureUserLedger(database, user);
-      const balance = getUserLedgerBalance(database, userId);
+      const canonicalUserId = String(user?.id ?? userId ?? "");
+      const balance = getUserLedgerBalance(database, canonicalUserId);
       return {
         success: balance >= requiredAmount,
         coin_balance: balance,
@@ -245,7 +256,10 @@ function createCoinService({ database, createNotification }) {
     },
 
     claimDailyStreakReward(userId) {
-      const user = database.users.find((entry) => entry.id === userId);
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /coins/claim-daily-streak - requested userId:", userId);
+      console.log("[IDENTITY] /coins/claim-daily-streak - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /coins/claim-daily-streak - resolved record email:", user?.email ?? "NOT_FOUND");
       if (!user) {
         return {
           status: 404,
@@ -304,7 +318,8 @@ function createCoinService({ database, createNotification }) {
       user.updatedAt = now;
 
       // Find user index to update the array
-      const userIndex = database.users.findIndex((entry) => entry.id === userId);
+      const canonicalUserId = String(user?.id ?? userId ?? "");
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === canonicalUserId);
       if (userIndex !== -1) {
         database.users[userIndex] = user;
       }

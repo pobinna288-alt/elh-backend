@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
+const { resolveUserFromJwt } = require("../common/resolveUser");
 
 // ─── Auth Middleware ─────────────────────────────────────────────────────────
 
@@ -14,10 +15,25 @@ function requireAuth(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = {
-      ...decoded,
-      id: decoded.id || decoded.userId || decoded.sub || null
-    };
+    const database = req.app?.get("database");
+    const persistedUser = database && Array.isArray(database.users)
+      ? resolveUserFromJwt(database, decoded)
+      : null;
+
+    if (!persistedUser) {
+      console.log("[IDENTITY] /ads/* - JWT id:", decoded.id || decoded.userId || decoded.sub || null);
+      console.log("[IDENTITY] /ads/* - JWT email:", decoded.email || null);
+      console.log("[IDENTITY] /ads/* - resolved record id: NOT_FOUND");
+      console.log("[IDENTITY] /ads/* - resolved record email: NOT_FOUND");
+      console.log("[DIAG] /ads/* - no persisted record found; rejecting request");
+      return res.status(401).json({ success: false, error: "User not found", code: "USER_NOT_FOUND" });
+    }
+
+    req.user = { ...decoded, ...persistedUser };
+    console.log("[IDENTITY] /ads/* - JWT id:", decoded.id || decoded.userId || decoded.sub || null);
+    console.log("[IDENTITY] /ads/* - JWT email:", decoded.email || null);
+    console.log("[IDENTITY] /ads/* - resolved record id:", persistedUser.id);
+    console.log("[IDENTITY] /ads/* - resolved record email:", persistedUser.email ?? "NOT_FOUND");
     next();
   } catch (err) {
     return res.status(401).json({ success: false, error: "Unauthorized" });

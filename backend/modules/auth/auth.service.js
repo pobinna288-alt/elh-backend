@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const baseAuthService = require("../../services/authService");
+const { BASE_TRUST_SCORE } = require("../../services/trustScoreService");
 
 function createLegacyAuthService({
   database,
@@ -92,7 +93,7 @@ function createLegacyAuthService({
         total_streak_days: 0,
         last_active_date: new Date().toISOString(),
         last_streak_claimed_at: null,
-        trust_score: 50,
+        trust_score: BASE_TRUST_SCORE,
         total_referrals: 0,
         referral_coins_earned: 0,
         referral_code: null,

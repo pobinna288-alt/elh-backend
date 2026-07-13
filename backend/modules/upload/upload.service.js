@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const path = require("path");
 const videoDurationExtractor = require("../../utils/videoDurationExtractor");
+const { resolveUserById } = require("../../common/resolveUser");
 const { normalizeCurrencyCode } = require("../../services/currencyConversionService");
 const { convertToUsd } = require("../../services/currencyConversionService");
 const { normalizePrice } = require("../../utils/normalizePrice");
@@ -25,8 +26,11 @@ function createUploadService({
     videoDurationExtractor,
 
     updateProfilePicture({ userId, files }) {
-      const userIndex = database.users.findIndex((user) => user.id === userId);
-      if (userIndex === -1) {
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /user/profile/picture - requested userId:", userId);
+      console.log("[IDENTITY] /user/profile/picture - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /user/profile/picture - resolved record email:", user?.email ?? "NOT_FOUND");
+      if (!user) {
         return {
           status: 404,
           body: {
@@ -36,6 +40,7 @@ function createUploadService({
         };
       }
 
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
       const uploadedFile = files?.profile_picture?.[0] || files?.image?.[0] || files?.file?.[0];
       if (!uploadedFile) {
         return {
@@ -48,7 +53,6 @@ function createUploadService({
       }
 
       const imageUrl = `/uploads/profile-pictures/${uploadedFile.filename}`;
-      const user = database.users[userIndex];
       user.profile_picture = imageUrl;
       user.profilePhoto = imageUrl;
       user.updatedAt = new Date();
@@ -68,14 +72,17 @@ function createUploadService({
     },
 
     uploadProfileImage({ userId, file }) {
-      const userIndex = database.users.findIndex((u) => u.id === userId);
-      if (userIndex === -1) {
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /api/user/upload-profile - requested userId:", userId);
+      console.log("[IDENTITY] /api/user/upload-profile - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /api/user/upload-profile - resolved record email:", user?.email ?? "NOT_FOUND");
+      if (!user) {
         // Clean up orphaned upload
         try { fs.unlinkSync(file.path); } catch (_) {}
         return { status: 404, body: { success: false, error: "User not found" } };
       }
 
-      const user = database.users[userIndex];
+      const userIndex = database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""));
 
       // Delete old profile image from disk if it exists and is locally stored
       const oldImage = user.profileImage || user.profile_picture || user.profilePhoto;
@@ -113,8 +120,13 @@ function createUploadService({
         condition,
       } = body || {};
 
-      const userIndex = database.users.findIndex((entry) => entry.id === userId);
-      const user = userIndex !== -1 ? database.users[userIndex] : null;
+      const user = resolveUserById(database, userId);
+      console.log("[IDENTITY] /ads/create - requested userId:", userId);
+      console.log("[IDENTITY] /ads/create - resolved record id:", user?.id ?? "NOT_FOUND");
+      console.log("[IDENTITY] /ads/create - resolved record email:", user?.email ?? "NOT_FOUND");
+      const userIndex = user
+        ? database.users.findIndex((entry) => String(entry?.id ?? "") === String(user.id ?? ""))
+        : -1;
       const locationDetails = buildLocationDetails({ location, locality, city, country });
       const plan = resolveUserAdPlan(user);
       const now = new Date();
