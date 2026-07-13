@@ -16,7 +16,7 @@ function createCoinRoutes(context) {
 
 function registerCoinModule(app, context) {
   const router = createCoinRoutes(context);
-  app.use("/coins", router);
+  app.use("/api/coins", router);
   return router;
 }
 
