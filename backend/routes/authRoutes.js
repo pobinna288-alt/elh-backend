@@ -33,6 +33,7 @@ const {
 const { getAuthSecurityStore } = require("../services/authSecurityStore");
 const { resolveAdminFlags, normalizeUser } = require("../utils/adminRole");
 const { resolveUserFromJwt, resolveUserById } = require("../common/resolveUser");
+const appDb = require("../appDb");
 const { BASE_TRUST_SCORE } = require("../services/trustScoreService");
 
 // ============================================
@@ -112,6 +113,30 @@ const hydratePersistedUserById = (userId) => {
 
   database.users.push(persistedUser);
   return database.users[database.users.length - 1];
+};
+
+/**
+ * Load the freshest persisted user row directly from SQLite.
+ * The storageService proxy caches collections in memory per-process, so
+ * separate Node processes (e.g. PM2 cluster workers) can see stale data.
+ * Reading directly from app.db before returning /auth/me guarantees the
+ * response reflects the latest writes from any worker.
+ */
+const loadPersistedUserFromDb = (userId) => {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const row = appDb.prepare("SELECT data FROM users WHERE id = ?").get(String(userId));
+    if (row?.data) {
+      return JSON.parse(row.data);
+    }
+  } catch (error) {
+    console.error("[DIAG] loadPersistedUserFromDb error:", error.message);
+  }
+
+  return null;
 };
 
 /**
@@ -2956,7 +2981,10 @@ router.get("/me", (req, res) => {
       });
     }
 
-    const resolvedUser = { ...decoded, ...persistedUser };
+    // Bypass the in-memory cache: another Node process (e.g. PM2 cluster worker)
+    // may have written the latest values to SQLite, so read directly from app.db.
+    const freshUser = loadPersistedUserFromDb(persistedUser.id) || persistedUser;
+    const resolvedUser = { ...decoded, ...freshUser };
     const adminFlags = resolveAdminFlags(resolvedUser);
 
     console.log("[IDENTITY] /auth/me - JWT id:", userId);
