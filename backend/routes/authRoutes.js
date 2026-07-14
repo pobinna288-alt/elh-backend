@@ -80,11 +80,47 @@ const hydratePersistedPhoneUsers = () => {
       continue;
     }
 
-    database.users.push(persistedUser);
+    const canonical = loadCanonicalUserRow(persistedUser);
+    const merged = canonical ? { ...persistedUser, ...canonical } : persistedUser;
+    database.users.push(merged);
     hydratedCount += 1;
   }
 
   return hydratedCount;
+};
+
+const loadCanonicalUserRow = (user) => {
+  if (!user || !appDb) {
+    return null;
+  }
+
+  try {
+    const byId = appDb.prepare("SELECT data FROM users WHERE id = ?").get(String(user.id || user.userId || ""));
+    if (byId?.data) {
+      return JSON.parse(byId.data);
+    }
+
+    const phoneKey = normalizePhoneKey(
+      user.normalizedPhone || user.normalized_phone || user.phone_number || user.phoneNumber || user.phone,
+    );
+    if (phoneKey) {
+      const allRows = appDb.prepare("SELECT data FROM users").all();
+      for (const row of allRows) {
+        const data = row?.data ? JSON.parse(row.data) : null;
+        if (!data) continue;
+        const candidatePhone = normalizePhoneKey(
+          data.normalizedPhone || data.normalized_phone || data.phone_number || data.phoneNumber || data.phone,
+        );
+        if (candidatePhone === phoneKey) {
+          return data;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[DIAG] loadCanonicalUserRow error:", error.message);
+  }
+
+  return null;
 };
 
 const hydratePersistedUserById = (userId) => {
@@ -111,7 +147,9 @@ const hydratePersistedUserById = (userId) => {
     return database.users[existingIndex];
   }
 
-  database.users.push(persistedUser);
+  const canonical = loadCanonicalUserRow(persistedUser);
+  const merged = canonical ? { ...persistedUser, ...canonical } : persistedUser;
+  database.users.push(merged);
   return database.users[database.users.length - 1];
 };
 
@@ -1188,7 +1226,10 @@ const findUserByPhoneNumber = (phoneNumber, countryCode = "", fullPhone = "") =>
       id: persistedUserRef.user.id || persistedUserRef.userId,
     };
     syncUserPhoneFields(hydratedUser);
-    database.users.push(hydratedUser);
+
+    const canonical = loadCanonicalUserRow(hydratedUser);
+    const merged = canonical ? { ...hydratedUser, ...canonical } : hydratedUser;
+    database.users.push(merged);
     const wrappedUser = database.users[database.users.length - 1];
     state.phones.set(phoneKey, wrappedUser.id);
     return wrappedUser;

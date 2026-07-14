@@ -6,7 +6,6 @@ const {
   syncUserBalanceFromLedger,
 } = require("../../common/coinLedger");
 const { resolveUserById } = require("../../common/resolveUser");
-const appDb = require("../../appDb");
 
 const SERVER_REWARD_RULES = Object.freeze({
   engagement_reward: {
@@ -360,9 +359,6 @@ function createCoinService({ database, createNotification }) {
       } else {
         console.log("[CLAIM:6] WARNING: userIndex === -1, row NOT written to SQLite");
       }
-
-      const readback = appDb.prepare("SELECT data FROM users WHERE id = ?").get(String(canonicalUserId));
-      console.log("[CLAIM:7] SQLite readback after claim:", readback ? JSON.parse(readback.data) : "NOT_FOUND");
 
       return {
         status: 200,
